@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Usage Analytics - Chatello SaaS Admin{% endblock %}
+{% block page_title %}Usage Analytics{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3 class="text-primary">{{ daily_usage|sum(attribute='requests') }}</h3>
+                <p class="text-muted mb-0">Total Requests (30d)</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3 class="text-success">{{ "%.1f"|format((daily_usage|sum(attribute='tokens'))/1000) }}k</h3>
+                <p class="text-muted mb-0">Total Tokens (30d)</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3 class="text-warning">{{ "%.1f"|format(daily_usage|sum(attribute='requests')/30) }}</h3>
+                <p class="text-muted mb-0">Avg Requests/Day</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3 class="text-info">{{ provider_usage|length }}</h3>
+                <p class="text-muted mb-0">Active Providers</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Daily Usage Chart -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Daily Usage (Last 30 Days)
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if daily_usage %}
+                    <canvas id="dailyUsageChart" height="100"></canvas>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-chart-line fa-3x mb-3"></i>
+                        <p>No usage data available</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Provider Usage -->
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-robot me-2"></i>Provider Usage
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if provider_usage %}
+                    <canvas id="providerChart"></canvas>
+                    <div class="mt-3">
+                        {% for provider in provider_usage %}
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">{{ provider.provider|title }}</span>
+                            <span>
+                                <strong>{{ provider.requests }}</strong> requests
+                                <small class="text-muted">({{ "%.1f"|format(provider.tokens/1000) }}k tokens)</small>
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-robot fa-3x mb-3"></i>
+                        <p>No provider data available</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Licenses -->
+    <div class="col-md-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-trophy me-2"></i>Top Licenses by Usage
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if top_licenses %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>License</th>
+                                    <th>Customer</th>
+                                    <th>Requests</th>
+                                    <th>Tokens</th>
+                                    <th>Avg/Day</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for license in top_licenses %}
+                                <tr>
+                                    <td><code class="small">{{ license.license_key[:20] }}...</code></td>
+                                    <td><small>{{ license.email }}</small></td>
+                                    <td>{{ license.requests }}</td>
+                                    <td>{{ "%.1f"|format(license.tokens/1000) }}k</td>
+                                    <td>{{ "%.1f"|format(license.requests/30) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-trophy fa-3x mb-3"></i>
+                        <p>No usage data available</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Usage Details Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-table me-2"></i>Daily Usage Details
+        </h5>
+        <button class="btn btn-sm btn-outline-primary" onclick="exportUsageData()">
+            <i class="fas fa-download me-1"></i>Export CSV
+        </button>
+    </div>
+    <div class="card-body">
+        {% if daily_usage %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Requests</th>
+                            <th>Tokens</th>
+                            <th>Avg Tokens/Request</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for day in daily_usage %}
+                        <tr>
+                            <td>{{ day.date }}</td>
+                            <td>{{ day.requests }}</td>
+                            <td>{{ "%.1f"|format(day.tokens/1000) }}k</td>
+                            <td>{{ "%.0f"|format(day.tokens/day.requests) if day.requests > 0 else 0 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-table fa-3x mb-3"></i>
+                <p>No usage data available</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Daily usage chart
+{% if daily_usage %}
+const dailyCtx = document.getElementById('dailyUsageChart').getContext('2d');
+const dailyChart = new Chart(dailyCtx, {
+    type: 'line',
+    data: {
+        labels: [{% for day in daily_usage %}'{{ day.date }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            label: 'Requests',
+            data: [{% for day in daily_usage %}{{ day.requests }}{% if not loop.last %},{% endif %}{% endfor %}],
+            borderColor: '#74b9ff',
+            backgroundColor: 'rgba(116, 185, 255, 0.1)',
+            tension: 0.3,
+            fill: true
+        }, {
+            label: 'Tokens (÷100)',
+            data: [{% for day in daily_usage %}{{ (day.tokens/100)|int }}{% if not loop.last %},{% endif %}{% endfor %}],
+            borderColor: '#00b894',
+            backgroundColor: 'rgba(0, 184, 148, 0.1)',
+            tension: 0.3,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'bottom',
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+{% endif %}
+
+// Provider usage chart
+{% if provider_usage %}
+const providerCtx = document.getElementById('providerChart').getContext('2d');
+const providerChart = new Chart(providerCtx, {
+    type: 'doughnut',
+    data: {
+        labels: [{% for provider in provider_usage %}'{{ provider.provider|title }}'{% if not loop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for provider in provider_usage %}{{ provider.requests }}{% if not loop.last %},{% endif %}{% endfor %}],
+            backgroundColor: [
+                '#74b9ff',
+                '#00b894',
+                '#fdcb6e',
+                '#e17055',
+                '#a29bfe'
+            ],
+            borderWidth: 0
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'bottom',
+            }
+        }
+    }
+});
+{% endif %}
+
+// Export function
+function exportUsageData() {
+    alert('CSV export functionality will be implemented in next version');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,297 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard - Chatello Admin{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.total_customers or 0 }}</div>
+        <div class="stat-label">Total Customers</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.active_licenses or 0 }}</div>
+        <div class="stat-label">Active Licenses</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.expired_licenses or 0 }}</div>
+        <div class="stat-label">Expired Licenses</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ (stats.plan_distribution.values() | list | sum) or 0 }}</div>
+        <div class="stat-label">Total Plans</div>
+    </div>
+</div>
+
+<!-- Founders Deal Special Section -->
+{% if stats.founders_deal %}
+<div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 2rem;">
+    <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+        🚀 <span>Founders Deal - Limited Offer</span>
+        {% if stats.founders_deal.is_available %}
+            <span style="background: #4CAF50; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">AVAILABLE</span>
+        {% else %}
+            <span style="background: #FF5722; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">SOLD OUT</span>
+        {% endif %}
+    </h3>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold;">{{ stats.founders_deal.sold }}</div>
+            <div style="font-size: 0.9rem; opacity: 0.9;">Sold</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold;">{{ stats.founders_deal.remaining }}</div>
+            <div style="font-size: 0.9rem; opacity: 0.9;">Remaining</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold;">{{ stats.founders_deal.percentage_sold }}%</div>
+            <div style="font-size: 0.9rem; opacity: 0.9;">Progress</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold;">€{{ "%.0f" | format(stats.founders_deal.revenue) }}</div>
+            <div style="font-size: 0.9rem; opacity: 0.9;">Revenue</div>
+        </div>
+    </div>
+    
+    <!-- Progress Bar -->
+    <div style="background: rgba(255,255,255,0.2); border-radius: 10px; height: 20px; overflow: hidden; margin-bottom: 1rem;">
+        <div style="background: linear-gradient(90deg, #4CAF50, #2196F3); height: 100%; width: {{ stats.founders_deal.percentage_sold }}%; transition: width 0.3s ease;"></div>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; opacity: 0.9;">
+        <span>€29 × {{ stats.founders_deal.sold }} customers = €{{ "%.0f" | format(stats.founders_deal.revenue) }}</span>
+        <span>Target: €14,500 ({{ stats.founders_deal.total_limit }} licenses)</span>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>📊 Plan Distribution</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: center;">
+        <div>
+            {% if stats.plan_distribution %}
+                {% for plan, count in stats.plan_distribution.items() %}
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="width: 12px; height: 12px; border-radius: 3px; background: {% if plan.lower() == 'starter' %}#3498db{% elif plan.lower() == 'pro' %}#2ecc71{% elif plan.lower() == 'founders' %}#9b59b6{% else %}#e74c3c{% endif %};"></div>
+                        <span>{{ plan.title() }}:</span>
+                    </div>
+                    <strong style="color: #667eea;">{{ count }}</strong>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #666; font-style: italic;">No plan data available</p>
+            {% endif %}
+        </div>
+        <div style="position: relative; height: 200px;">
+            <canvas id="planChart" style="max-width: 100%; max-height: 200px;"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>🔄 Recent License Activity</h3>
+    {% if stats.recent_licenses %}
+        <table>
+            <thead>
+                <tr>
+                    <th>License Key</th>
+                    <th>Customer</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for license in stats.recent_licenses %}
+                <tr>
+                    <td><code>{{ license.license_key[:20] }}...</code></td>
+                    <td>
+                        <strong>{{ license.customer_name }}</strong><br>
+                        <small>{{ license.customer_email }}</small>
+                    </td>
+                    <td>
+                        <span style="background: #e3f2fd; color: #1565c0; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.8rem;">
+                            {{ license.plan_name }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="background: {% if license.status == 'active' %}#e8f5e8; color: #2e7d32{% else %}#fff3e0; color: #ef6c00{% endif %}; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.8rem;">
+                            {{ license.status.title() }}
+                        </span>
+                    </td>
+                    <td>{{ license.created_at.isoformat()[:16].replace('T', ' ') if license.created_at else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color: #666; font-style: italic;">No recent license activity</p>
+    {% endif %}
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem;">
+    <div class="card">
+        <h3>📈 License Status</h3>
+        <div style="position: relative; height: 200px; margin-top: 1rem;">
+            <canvas id="statusChart" style="max-width: 100%; max-height: 200px;"></canvas>
+        </div>
+        <div style="display: flex; justify-content: space-around; margin-top: 1rem; font-size: 0.85rem;">
+            <div style="text-align: center;">
+                <div style="color: #2ecc71; font-weight: bold;">{{ stats.active_licenses or 0 }}</div>
+                <div style="color: #666;">Active</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="color: #f39c12; font-weight: bold;">{{ stats.expired_licenses or 0 }}</div>
+                <div style="color: #666;">Expired</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3>⚡ Quick Actions</h3>
+        <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+            <a href="{{ url_for('customers') }}" class="btn btn-primary">👥 Manage Customers</a>
+            <a href="{{ url_for('licenses') }}" class="btn btn-primary">🎫 Manage Licenses</a>
+            <button onclick="refreshStats()" class="btn btn-primary" style="background: #17a2b8;">🔄 Refresh Data</button>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3>🔗 System Status</h3>
+        <div style="margin-top: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #4caf50;"></div>
+                <span>MongoDB Atlas</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #4caf50;"></div>
+                <span>SaaS API</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #4caf50;"></div>
+                <span>License Validation</span>
+            </div>
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee; font-size: 0.85rem; color: #666;">
+                <div>Version: 2.0.0-mongodb</div>
+                <div>MongoDB Atlas Edition</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Dati per i grafici
+const planData = {
+    {% if stats.plan_distribution %}
+        labels: [{% for plan in stats.plan_distribution.keys() %}'{{ plan.title() }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        data: [{% for count in stats.plan_distribution.values() %}{{ count }}{% if not loop.last %}, {% endif %}{% endfor %}],
+        colors: [
+            {% for plan in stats.plan_distribution.keys() %}
+                '{% if plan.lower() == "starter" %}#3498db{% elif plan.lower() == "pro" %}#2ecc71{% elif plan.lower() == "founders" %}#9b59b6{% else %}#e74c3c{% endif %}'
+                {% if not loop.last %}, {% endif %}
+            {% endfor %}
+        ]
+    {% else %}
+        labels: ['No Data'],
+        data: [1],
+        colors: ['#bdc3c7']
+    {% endif %}
+};
+
+const statusData = {
+    labels: ['Active', 'Expired'],
+    data: [{{ stats.active_licenses or 0 }}, {{ stats.expired_licenses or 0 }}],
+    colors: ['#2ecc71', '#f39c12']
+};
+
+// Configurazione comune per i grafici
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            position: 'bottom',
+            labels: {
+                boxWidth: 12,
+                padding: 15,
+                font: {
+                    size: 11
+                }
+            }
+        }
+    }
+};
+
+// Inizializzazione dei grafici
+document.addEventListener('DOMContentLoaded', function() {
+    // Grafico Plan Distribution (Doughnut)
+    const planCtx = document.getElementById('planChart');
+    if (planCtx) {
+        new Chart(planCtx, {
+            type: 'doughnut',
+            data: {
+                labels: planData.labels,
+                datasets: [{
+                    data: planData.data,
+                    backgroundColor: planData.colors,
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                ...chartOptions,
+                cutout: '60%',
+                plugins: {
+                    ...chartOptions.plugins,
+                    legend: {
+                        ...chartOptions.plugins.legend,
+                        display: false // Nascosto perché abbiamo la legenda custom
+                    }
+                }
+            }
+        });
+    }
+
+    // Grafico License Status (Pie)
+    const statusCtx = document.getElementById('statusChart');
+    if (statusCtx) {
+        new Chart(statusCtx, {
+            type: 'pie',
+            data: {
+                labels: statusData.labels,
+                datasets: [{
+                    data: statusData.data,
+                    backgroundColor: statusData.colors,
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                ...chartOptions,
+                plugins: {
+                    ...chartOptions.plugins,
+                    legend: {
+                        ...chartOptions.plugins.legend,
+                        display: false // Nascosto perché abbiamo numeri sotto
+                    }
+                }
+            }
+        });
+    }
+});
+
+// Funzione per refresh dei dati
+function refreshStats() {
+    location.reload();
+}
+
+// Auto-refresh ogni 5 minuti
+setInterval(function() {
+    console.log('Auto-refreshing dashboard data...');
+    location.reload();
+}, 300000); // 5 minuti
+</script>
+{% endblock %}

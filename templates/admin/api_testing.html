@@ -1,0 +1,381 @@
+{% extends "admin/base.html" %}
+
+{% block title %}API Testing - Chatello Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">🧪 API Endpoint Testing</h1>
+    
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- API Testing Form -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+                    <h5 class="mb-0">🚀 Test API Endpoints</h5>
+                </div>
+                <div class="card-body">
+                    <form id="apiTestForm">
+                        <!-- Endpoint Selection -->
+                        <div class="mb-3">
+                            <label for="endpoint_select" class="form-label">📋 Select Endpoint</label>
+                            <select class="form-select" id="endpoint_select" name="endpoint_select" required>
+                                <option value="">Choose an endpoint...</option>
+                                {% for endpoint in endpoints %}
+                                <option value="{{ endpoint.url }}" 
+                                        data-method="{{ endpoint.method }}" 
+                                        data-auth="{{ endpoint.auth_required|string|lower }}"
+                                        data-description="{{ endpoint.description }}"
+                                        {% if endpoint.parameters %}data-parameters="{{ endpoint.parameters|join(', ') }}"{% endif %}>
+                                    {{ endpoint.name }} ({{ endpoint.method }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text" id="endpoint_description"></div>
+                        </div>
+
+                        <!-- Custom URL -->
+                        <div class="mb-3">
+                            <label for="endpoint_url" class="form-label">🔗 Endpoint URL</label>
+                            <div class="input-group">
+                                <span class="input-group-text">https://api.chatello.io</span>
+                                <input type="text" class="form-control" id="endpoint_url" name="endpoint_url" 
+                                       placeholder="/api/usage/current" required>
+                            </div>
+                        </div>
+
+                        <!-- HTTP Method -->
+                        <div class="mb-3">
+                            <label for="method" class="form-label">📤 HTTP Method</label>
+                            <select class="form-select" id="method" name="method">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                            </select>
+                        </div>
+
+                        <!-- License Key Selection -->
+                        <div class="mb-3" id="license_key_section">
+                            <label for="license_key" class="form-label">🔑 License Key (Authentication)</label>
+                            <select class="form-select" id="license_key" name="license_key">
+                                <option value="">No authentication</option>
+                                {% for license in sample_licenses %}
+                                <option value="{{ license.license_key }}">
+                                    {{ license.license_key }} ({{ license.plan_name }} - {{ license.customer_email }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Select a license key for authenticated endpoints</div>
+                        </div>
+
+                        <!-- Parameters -->
+                        <div class="mb-3">
+                            <label for="parameters" class="form-label">⚙️ URL Parameters</label>
+                            <input type="text" class="form-control" id="parameters" name="parameters" 
+                                   placeholder="days=7&provider=openai">
+                            <div class="form-text" id="parameter_suggestions"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-play-fill"></i> Test Endpoint
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Response Display -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">📊 API Response</h5>
+                </div>
+                <div class="card-body">
+                    <div id="response_container">
+                        <div class="text-muted text-center py-4">
+                            <i class="bi bi-arrow-left"></i> Select and test an endpoint to see the response
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Test Buttons -->
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">⚡ Quick Tests</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3 mb-2">
+                    <button class="btn btn-outline-primary w-100 quick-test-btn" 
+                            data-url="/api/health" data-method="GET" data-auth="false">
+                        🏥 Health Check
+                    </button>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <button class="btn btn-outline-success w-100 quick-test-btn" 
+                            data-url="/api/usage/current" data-method="GET" data-auth="true">
+                        📊 Current Usage
+                    </button>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <button class="btn btn-outline-warning w-100 quick-test-btn" 
+                            data-url="/api/limits/check" data-method="GET" data-auth="true">
+                        ⚡ Check Limits
+                    </button>
+                </div>
+                <div class="col-md-3 mb-2">
+                    <button class="btn btn-outline-info w-100 quick-test-btn" 
+                            data-url="/api/validate" data-method="POST" data-auth="true">
+                        🔍 Validate License
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sample License Keys -->
+    <div class="card mt-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">🔑 Available Test License Keys</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for license in sample_licenses %}
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100" style="border-left: 4px solid 
+                        {% if license.plan_name == 'starter' %}#3498db
+                        {% elif license.plan_name == 'pro' %}#2ecc71
+                        {% else %}#e74c3c{% endif %};">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                {% if license.plan_name == 'starter' %}🎯{% elif license.plan_name == 'pro' %}⭐{% else %}🚀{% endif %}
+                                {{ license.plan_name|upper }} Plan
+                            </h6>
+                            <p class="card-text">
+                                <strong>Key:</strong> <code>{{ license.license_key }}</code><br>
+                                <strong>Customer:</strong> {{ license.customer_email }}<br>
+                                <strong>Status:</strong> 
+                                <span class="badge bg-{{ 'success' if license.status == 'active' else 'warning' }}">
+                                    {{ license.status }}
+                                </span>
+                            </p>
+                            <button class="btn btn-sm btn-outline-primary copy-key-btn" 
+                                    data-key="{{ license.license_key }}">
+                                <i class="bi bi-clipboard"></i> Copy Key
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form handling
+document.addEventListener('DOMContentLoaded', function() {
+    const endpointSelect = document.getElementById('endpoint_select');
+    const endpointUrl = document.getElementById('endpoint_url');
+    const method = document.getElementById('method');
+    const licenseKeySection = document.getElementById('license_key_section');
+    const licenseKey = document.getElementById('license_key');
+    const parameters = document.getElementById('parameters');
+    const endpointDescription = document.getElementById('endpoint_description');
+    const parameterSuggestions = document.getElementById('parameter_suggestions');
+    const responseContainer = document.getElementById('response_container');
+    const apiTestForm = document.getElementById('apiTestForm');
+
+    // Update form when endpoint is selected
+    endpointSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const url = selectedOption.value;
+        const methodValue = selectedOption.dataset.method;
+        const authRequired = selectedOption.dataset.auth === 'true';
+        const description = selectedOption.dataset.description;
+        const parameterList = selectedOption.dataset.parameters;
+
+        endpointUrl.value = url;
+        method.value = methodValue;
+        
+        // Show/hide authentication
+        licenseKeySection.style.display = authRequired ? 'block' : 'none';
+        if (authRequired && licenseKey.options.length > 1) {
+            licenseKey.selectedIndex = 1; // Select first license
+        }
+        
+        // Update description
+        endpointDescription.textContent = description;
+        
+        // Update parameter suggestions
+        if (parameterList) {
+            parameterSuggestions.textContent = `Suggested parameters: ${parameterList}`;
+        } else {
+            parameterSuggestions.textContent = '';
+        }
+    });
+
+    // Quick test buttons
+    document.querySelectorAll('.quick-test-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            endpointUrl.value = this.dataset.url;
+            method.value = this.dataset.method;
+            
+            if (this.dataset.auth === 'true' && licenseKey.options.length > 1) {
+                licenseKey.selectedIndex = 1;
+                licenseKeySection.style.display = 'block';
+            } else {
+                licenseKey.selectedIndex = 0;
+                licenseKeySection.style.display = 'none';
+            }
+            
+            // Auto-submit
+            submitTest();
+        });
+    });
+
+    // Copy key buttons
+    document.querySelectorAll('.copy-key-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const key = this.dataset.key;
+            navigator.clipboard.writeText(key).then(() => {
+                this.innerHTML = '<i class="bi bi-check"></i> Copied!';
+                this.classList.add('btn-success');
+                setTimeout(() => {
+                    this.innerHTML = '<i class="bi bi-clipboard"></i> Copy Key';
+                    this.classList.remove('btn-success');
+                }, 2000);
+            });
+        });
+    });
+
+    // Form submission
+    apiTestForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        submitTest();
+    });
+
+    function submitTest() {
+        const formData = new FormData(apiTestForm);
+        
+        responseContainer.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-2">Testing endpoint...</div>
+            </div>
+        `;
+
+        fetch('/api/test_endpoint', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayResponse(data);
+            } else {
+                displayError(data.error);
+            }
+        })
+        .catch(error => {
+            displayError('Request failed: ' + error.message);
+        });
+    }
+
+    function displayResponse(data) {
+        const statusClass = data.status_code < 400 ? 'success' : 'danger';
+        
+        responseContainer.innerHTML = `
+            <div class="mb-3">
+                <strong>🔗 Request URL:</strong><br>
+                <code>${data.url}</code>
+            </div>
+            <div class="mb-3">
+                <strong>📡 Status Code:</strong>
+                <span class="badge bg-${statusClass} ms-2">${data.status_code}</span>
+            </div>
+            <div class="mb-3">
+                <strong>📊 Response Data:</strong>
+                <pre class="bg-light p-3 mt-2 rounded" style="max-height: 400px; overflow-y: auto;"><code>${JSON.stringify(data.data, null, 2)}</code></pre>
+            </div>
+            <div class="mb-3">
+                <button class="btn btn-sm btn-outline-primary" onclick="copyResponse(this)" data-response='${JSON.stringify(data.data)}'>
+                    <i class="bi bi-clipboard"></i> Copy Response
+                </button>
+            </div>
+        `;
+    }
+
+    function displayError(error) {
+        responseContainer.innerHTML = `
+            <div class="alert alert-danger">
+                <strong>❌ Error:</strong> ${error}
+            </div>
+        `;
+    }
+
+    // Global function for copy response
+    window.copyResponse = function(button) {
+        const response = button.dataset.response;
+        navigator.clipboard.writeText(response).then(() => {
+            button.innerHTML = '<i class="bi bi-check"></i> Copied!';
+            button.classList.add('btn-success');
+            setTimeout(() => {
+                button.innerHTML = '<i class="bi bi-clipboard"></i> Copy Response';
+                button.classList.remove('btn-success');
+            }, 2000);
+        });
+    };
+});
+</script>
+
+<style>
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+}
+
+pre code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #764ba2, #667eea);
+}
+
+.quick-test-btn {
+    transition: all 0.2s;
+}
+
+.quick-test-btn:hover {
+    transform: translateY(-1px);
+}
+</style>
+{% endblock %}

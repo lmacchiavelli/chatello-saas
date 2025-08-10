@@ -1,0 +1,381 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Plans Management - Chatello Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">📋 Plans Management</h1>
+    
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Plans Overview Cards -->
+    <div class="row mb-4">
+        {% for plan in plans %}
+        <div class="col-md-4 mb-3">
+            <div class="card h-100" style="background: linear-gradient(135deg, 
+                {% if plan.name.lower() == 'starter' %}#3498db, #2c3e50
+                {% elif plan.name.lower() == 'pro' %}#2ecc71, #27ae60
+                {% else %}#e74c3c, #c0392b{% endif %}); color: white;">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        {% if plan.name.lower() == 'starter' %}🎯{% elif plan.name.lower() == 'pro' %}⭐{% else %}🚀{% endif %}
+                        {{ plan.name|upper }} Plan
+                    </h5>
+                    <h6 class="card-subtitle mb-2" style="opacity: 0.9;">€{{ plan.price }}/month</h6>
+                    <hr style="background-color: rgba(255,255,255,0.3);">
+                    
+                    <div class="mb-3">
+                        <small style="opacity: 0.8;">Active Licenses:</small>
+                        <div class="h4 mb-0">{{ plan.active_licenses }}</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <small style="opacity: 0.8;">Current Month Usage:</small>
+                        <div class="h5 mb-0">
+                            {{ plan.total_monthly_usage|default(0) }} calls
+                            {% if plan.monthly_requests > 0 %}
+                                <small>({{ ((plan.total_monthly_usage / (plan.monthly_requests * plan.active_licenses)) * 100)|round(1) if plan.active_licenses > 0 else 0 }}%)</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <small style="opacity: 0.8;">Rate Limits:</small>
+                        <div class="small">
+                            {% if plan.requests_per_minute > 0 %}
+                                📈 {{ plan.requests_per_minute }}/min
+                            {% else %}
+                                📈 Unlimited/min
+                            {% endif %}
+                            |
+                            {% if plan.requests_per_hour > 0 %}
+                                🕐 {{ plan.requests_per_hour }}/hour
+                            {% else %}
+                                🕐 Unlimited/hour
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <small style="opacity: 0.8;">Avg Usage per License:</small>
+                        <div class="h6 mb-0">{{ plan.avg_usage_per_license }} calls/month</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Plans Configuration Table -->
+    <div class="card">
+        <div class="card-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+            <h5 class="mb-0">⚙️ Configure Plan Limits</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Plan</th>
+                            <th>Price</th>
+                            <th>Monthly Limit</th>
+                            <th>Per Minute</th>
+                            <th>Per Hour</th>
+                            <th>Features</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for plan in plans %}
+                        <tr>
+                            <td>
+                                <strong>{{ plan.name }}</strong>
+                                {% if plan.name.lower() == 'pro' %}
+                                    <span class="badge bg-success ms-2">Most Popular</span>
+                                {% endif %}
+                            </td>
+                            <td>€{{ plan.price }}/month</td>
+                            <td>
+                                <div class="input-group" style="width: 150px;">
+                                    <input type="number" 
+                                           name="monthly_requests" 
+                                           class="form-control form-control-sm monthly-input-{{ plan._id }}" 
+                                           value="{{ plan.monthly_requests }}"
+                                           min="0"
+                                           {% if plan.name.lower() == 'starter' %}
+                                           readonly
+                                           title="Starter plan uses customer's own API keys (BYOK)"
+                                           {% endif %}>
+                                    <span class="input-group-text small">req/mo</span>
+                                </div>
+                                {% if plan.monthly_requests == 0 %}
+                                    <small class="text-muted d-block mt-1">Unlimited (BYOK)</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="input-group" style="width: 120px;">
+                                    <input type="number" 
+                                           name="requests_per_minute" 
+                                           class="form-control form-control-sm minute-input-{{ plan._id }}" 
+                                           value="{{ plan.requests_per_minute|default(0) }}"
+                                           min="0"
+                                           {% if plan.name.lower() == 'starter' %}
+                                           readonly
+                                           title="Starter plan uses customer's own API keys (BYOK)"
+                                           {% endif %}>
+                                    <span class="input-group-text small">/min</span>
+                                </div>
+                                {% if plan.requests_per_minute == 0 %}
+                                    <small class="text-muted d-block mt-1">Unlimited</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="input-group" style="width: 120px;">
+                                    <input type="number" 
+                                           name="requests_per_hour" 
+                                           class="form-control form-control-sm hour-input-{{ plan._id }}" 
+                                           value="{{ plan.requests_per_hour|default(0) }}"
+                                           min="0"
+                                           {% if plan.name.lower() == 'starter' %}
+                                           readonly
+                                           title="Starter plan uses customer's own API keys (BYOK)"
+                                           {% endif %}>
+                                    <span class="input-group-text small">/hr</span>
+                                </div>
+                                {% if plan.requests_per_hour == 0 %}
+                                    <small class="text-muted d-block mt-1">Unlimited</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="small">
+                                    {% for feature in plan.features %}
+                                        <span class="badge bg-secondary me-1 mb-1">{{ feature|replace('_', ' ')|title }}</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if plan.name.lower() != 'starter' %}
+                                <button type="submit" 
+                                        form="form-{{ plan._id }}"
+                                        class="btn btn-sm btn-primary update-btn"
+                                        data-plan-id="{{ plan._id }}">
+                                    <i class="bi bi-save"></i> Update
+                                </button>
+                                {% else %}
+                                <span class="text-muted small">BYOK - No limit</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <!-- Hidden form for update button -->
+                        <form id="form-{{ plan._id }}" method="POST" action="{{ url_for('update_plan_limits') }}" style="display: none;">
+                            <input type="hidden" name="plan_id" value="{{ plan._id }}">
+                            <input type="hidden" name="monthly_requests" class="monthly-requests-{{ plan._id }}">
+                            <input type="hidden" name="requests_per_minute" class="minute-requests-{{ plan._id }}">
+                            <input type="hidden" name="requests_per_hour" class="hour-requests-{{ plan._id }}">
+                        </form>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recommendations Card -->
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">💡 Recommended Limits</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <h6>🌟 Pro Plan (€7.99/month)</h6>
+                    <ul class="small">
+                        <li><strong>Monthly:</strong> 5,000-20,000 requests</li>
+                        <li><strong>Per minute:</strong> 5-15 requests</li>
+                        <li><strong>Per hour:</strong> 100-500 requests</li>
+                        <li><small class="text-muted">Good for small businesses</small></li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h6>🚀 Agency Plan (€19.99/month)</h6>
+                    <ul class="small">
+                        <li><strong>Monthly:</strong> 30,000-100,000 requests</li>
+                        <li><strong>Per minute:</strong> 20-50 requests</li>
+                        <li><strong>Per hour:</strong> 500-2,000 requests</li>
+                        <li><small class="text-muted">For agencies & heavy usage</small></li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h6>⚡ Rate Limiting Guidelines</h6>
+                    <ul class="small">
+                        <li><strong>Anti-abuse:</strong> Prevents spam/attacks</li>
+                        <li><strong>Fair usage:</strong> Ensures server stability</li>
+                        <li><strong>Burst protection:</strong> Short-term spike control</li>
+                        <li><strong>Recommended ratio:</strong> Hour ≈ Minute × 20</li>
+                        <li><small class="text-muted">Monthly ≈ Hour × 15 × 24</small></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Usage Statistics Card -->
+    <div class="card mt-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">📊 Usage Statistics & Trends</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="usageChart" height="80"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+// Update form values when clicking update button
+document.querySelectorAll('.update-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const planId = this.dataset.planId;
+        const row = this.closest('tr');
+        
+        // Get all input values
+        const monthlyInput = row.querySelector('.monthly-input-' + planId);
+        const minuteInput = row.querySelector('.minute-input-' + planId);
+        const hourInput = row.querySelector('.hour-input-' + planId);
+        
+        // Get hidden form inputs
+        const monthlyHidden = document.querySelector('.monthly-requests-' + planId);
+        const minuteHidden = document.querySelector('.minute-requests-' + planId);
+        const hourHidden = document.querySelector('.hour-requests-' + planId);
+        
+        // Update hidden inputs with current values
+        if (monthlyHidden && monthlyInput) monthlyHidden.value = monthlyInput.value;
+        if (minuteHidden && minuteInput) minuteHidden.value = minuteInput.value;
+        if (hourHidden && hourInput) hourHidden.value = hourInput.value;
+        
+        // Submit form
+        document.getElementById('form-' + planId).submit();
+    });
+});
+
+// Usage Chart
+const ctx = document.getElementById('usageChart').getContext('2d');
+const usageChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: [
+            {% for plan in plans %}'{{ plan.name }}'{% if not loop.last %},{% endif %}{% endfor %}
+        ],
+        datasets: [{
+            label: 'Current Month Usage',
+            data: [
+                {% for plan in plans %}{{ plan.total_monthly_usage }}{% if not loop.last %},{% endif %}{% endfor %}
+            ],
+            backgroundColor: [
+                'rgba(52, 152, 219, 0.6)',
+                'rgba(46, 204, 113, 0.6)',
+                'rgba(231, 76, 60, 0.6)'
+            ],
+            borderColor: [
+                'rgba(52, 152, 219, 1)',
+                'rgba(46, 204, 113, 1)',
+                'rgba(231, 76, 60, 1)'
+            ],
+            borderWidth: 2
+        }, {
+            label: 'Monthly Limit',
+            data: [
+                {% for plan in plans %}
+                    {% if plan.monthly_requests > 0 %}
+                        {{ plan.monthly_requests * plan.active_licenses }}
+                    {% else %}
+                        0
+                    {% endif %}
+                    {% if not loop.last %},{% endif %}
+                {% endfor %}
+            ],
+            type: 'line',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.4
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        label += context.parsed.y.toLocaleString() + ' requests';
+                        return label;
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return value.toLocaleString();
+                    }
+                }
+            }
+        }
+    }
+});
+</script>
+
+<style>
+.table td {
+    vertical-align: middle;
+}
+
+.input-group-text {
+    font-size: 0.875rem;
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+}
+
+.badge {
+    font-weight: 500;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #764ba2, #667eea);
+}
+</style>
+{% endblock %}

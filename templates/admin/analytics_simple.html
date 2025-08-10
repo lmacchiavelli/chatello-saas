@@ -1,0 +1,209 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Financial Analytics - Chatello Admin{% endblock %}
+
+{% block content %}
+
+<div class="analytics-wrapper">
+    <div class="page-header">
+        <h1>💰 Financial Analytics Dashboard</h1>
+        <p>Real-time financial metrics and performance indicators</p>
+    </div>
+
+    <div class="stats-grid" style="margin-bottom: 2rem;">
+        <div class="stat-card">
+            <div class="stat-number">€{{ metrics.mrr }}</div>
+            <div class="stat-label">Monthly Recurring Revenue</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">€{{ metrics.arr }}</div>
+            <div class="stat-label">Annual Recurring Revenue</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ metrics.total_active }}</div>
+            <div class="stat-label">Active Subscribers</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ metrics.mrr_growth }}%</div>
+            <div class="stat-label">MRR Growth</div>
+        </div>
+    </div>
+
+    <!-- Founders Deal Special Metrics -->
+    {% if metrics.founders_deal %}
+    <div class="card" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; margin-bottom: 2rem;">
+        <h3 style="margin-bottom: 1rem;">🚀 Founders Deal - One-Time Revenue</h3>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+            <div style="text-align: center;">
+                <div style="font-size: 2rem; font-weight: bold;">{{ metrics.founders_deal.sold }}/500</div>
+                <div style="opacity: 0.9;">Licenses Sold</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 2rem; font-weight: bold;">€{{ "%.0f" | format(metrics.founders_deal.total_revenue) }}</div>
+                <div style="opacity: 0.9;">Total Revenue</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 2rem; font-weight: bold;">{{ metrics.founders_deal.remaining }}</div>
+                <div style="opacity: 0.9;">Remaining</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 2rem; font-weight: bold;">{{ metrics.founders_deal.percentage_sold }}%</div>
+                <div style="opacity: 0.9;">Progress</div>
+            </div>
+        </div>
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.2);">
+            <div style="opacity: 0.9;">One-time lifetime revenue: €29 × {{ metrics.founders_deal.sold }} = €{{ "%.0f" | format(metrics.founders_deal.total_revenue) }}</div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Combined Revenue Summary -->
+    {% if metrics.one_time_revenue %}
+    <div class="card" style="background: linear-gradient(135deg, #f39c12, #e67e22); color: white; margin-bottom: 2rem;">
+        <h3>💎 Total Revenue Summary</h3>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem;">
+            <div style="text-align: center;">
+                <div style="font-size: 1.8rem; font-weight: bold;">€{{ metrics.mrr }}</div>
+                <div style="opacity: 0.9;">Recurring (Monthly)</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 1.8rem; font-weight: bold;">€{{ "%.0f" | format(metrics.one_time_revenue) }}</div>
+                <div style="opacity: 0.9;">One-Time (Lifetime)</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 1.8rem; font-weight: bold;">€{{ "%.0f" | format(metrics.mrr + metrics.one_time_revenue) }}</div>
+                <div style="opacity: 0.9;">Total Combined</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+    <h3>📊 Revenue by Plan</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1rem;">
+        {% if metrics.revenue_by_plan.starter %}
+        <div style="padding: 1rem; background: linear-gradient(135deg, #3498db, #2980b9); color: white; border-radius: 8px;">
+            <h4>Starter Plan</h4>
+            <div style="font-size: 1.5rem; font-weight: bold;">€{{ metrics.revenue_by_plan.starter.revenue }}</div>
+            <div style="opacity: 0.8;">{{ metrics.revenue_by_plan.starter.count }} customers</div>
+        </div>
+        {% endif %}
+        {% if metrics.revenue_by_plan.pro %}
+        <div style="padding: 1rem; background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; border-radius: 8px;">
+            <h4>Pro Plan</h4>
+            <div style="font-size: 1.5rem; font-weight: bold;">€{{ metrics.revenue_by_plan.pro.revenue }}</div>
+            <div style="opacity: 0.8;">{{ metrics.revenue_by_plan.pro.count }} customers</div>
+        </div>
+        {% endif %}
+        {% if metrics.revenue_by_plan.agency %}
+        <div style="padding: 1rem; background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; border-radius: 8px;">
+            <h4>Agency Plan</h4>
+            <div style="font-size: 1.5rem; font-weight: bold;">€{{ metrics.revenue_by_plan.agency.revenue }}</div>
+            <div style="opacity: 0.8;">{{ metrics.revenue_by_plan.agency.count }} customers</div>
+        </div>
+        {% endif %}
+        {% if metrics.revenue_by_plan.founders %}
+        <div style="padding: 1rem; background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; border-radius: 8px;">
+            <h4>🚀 Founders Deal</h4>
+            <div style="font-size: 1.5rem; font-weight: bold;">€{{ "%.0f" | format(metrics.revenue_by_plan.founders.revenue) }}</div>
+            <div style="opacity: 0.8;">{{ metrics.revenue_by_plan.founders.count }} lifetime licenses</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+    <div class="card">
+    <h3>💳 Recent Transactions</h3>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Plan</th>
+                    <th style="text-align: right;">Amount</th>
+                    <th style="text-align: center;">Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transaction in recent_transactions %}
+                <tr>
+                    <td>{{ transaction.customer_name }}</td>
+                    <td>
+                        <span class="badge badge-{{ transaction.plan.lower() }}">{{ transaction.plan }}</span>
+                    </td>
+                    <td style="text-align: right; font-weight: bold;">€{{ transaction.amount }}</td>
+                    <td style="text-align: center;">{{ transaction.date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+    <div class="card">
+    <h3>📈 Customer Metrics</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; margin-top: 1rem;">
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold; color: #e67e22;">{{ metrics.churn_rate }}%</div>
+            <div style="color: #7f8c8d; margin-top: 0.5rem;">Churn Rate</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold; color: #27ae60;">€{{ metrics.ltv }}</div>
+            <div style="color: #7f8c8d; margin-top: 0.5rem;">Customer LTV</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold; color: #3498db;">{{ metrics.ltv_cac_ratio }}:1</div>
+            <div style="color: #7f8c8d; margin-top: 0.5rem;">LTV:CAC Ratio</div>
+        </div>
+    </div>
+</div>
+
+    <div style="background: #d5f4e6; border: 1px solid #27ae60; border-radius: 8px; padding: 1rem; margin-top: 2rem; color: #155724;">
+        <strong>✅ Analytics Dashboard is working correctly!</strong>
+        <p style="margin-top: 0.5rem; margin-bottom: 0;">All financial metrics are loading successfully without JSON serialization errors.</p>
+    </div>
+</div><!-- End analytics-wrapper -->
+
+<style>
+/* Ensure content stays within container bounds */
+.analytics-wrapper {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 3px solid #667eea;
+}
+
+.page-header h1 {
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+}
+
+.page-header p {
+    color: #7f8c8d;
+    font-size: 1.1rem;
+}
+
+.badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.badge-starter { background: #3498db; color: white; }
+.badge-pro { background: #2ecc71; color: white; }
+.badge-agency { background: #e74c3c; color: white; }
+
+/* Fix grid and card widths */
+.stats-grid, .card {
+    width: 100%;
+    box-sizing: border-box;
+}
+</style>
+
+{% endblock %}

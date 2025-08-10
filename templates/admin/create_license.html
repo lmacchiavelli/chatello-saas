@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Create License - Chatello SaaS Admin{% endblock %}
+{% block page_title %}Create New License{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-plus me-2"></i>Create New License
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="customer_email" class="form-label">Customer Email</label>
+                            <input type="email" class="form-control" id="customer_email" name="customer_email" required>
+                            <div class="form-text">If customer doesn't exist, it will be created automatically</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="plan_id" class="form-label">Plan</label>
+                            <select class="form-select" id="plan_id" name="plan_id" required>
+                                <option value="">Select a plan...</option>
+                                {% for plan in plans %}
+                                <option value="{{ plan.id }}" data-price="{{ plan.price }}">
+                                    {{ plan.name }} - €{{ "%.2f"|format(plan.price) }}/month
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="duration_months" class="form-label">Duration (Months)</label>
+                            <select class="form-select" id="duration_months" name="duration_months" required>
+                                <option value="1">1 Month</option>
+                                <option value="3">3 Months</option>
+                                <option value="6">6 Months</option>
+                                <option value="12" selected>12 Months</option>
+                                <option value="24">24 Months</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Total Amount</label>
+                            <div class="form-control-plaintext">
+                                <span id="totalAmount" class="h5 text-primary">€0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">Plan Features Preview</h6>
+                                <div id="planFeatures">
+                                    <p class="text-muted">Select a plan to see features</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('licenses') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Licenses
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create License
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Plan features data
+const planFeatures = {
+    '1': { // Starter
+        name: 'Starter',
+        features: [
+            'BYOK (Bring Your Own Key)',
+            'Support for OpenAI, Anthropic, DeepSeek',
+            'Manual API key configuration',
+            'Email support (48h response)',
+            'Basic analytics'
+        ]
+    },
+    '2': { // Pro
+        name: 'Pro',
+        features: [
+            'AI included - No API keys needed',
+            'Centralized AI proxy',
+            'Priority support (24h response)',
+            'Advanced analytics',
+            'Usage monitoring',
+            'Rate limiting protection'
+        ]
+    },
+    '3': { // Agency
+        name: 'Agency',
+        features: [
+            'White label solution',
+            'AI included - No API keys needed',
+            'Dedicated support with calls',
+            'Custom branding',
+            'Advanced analytics & reporting',
+            'Priority processing',
+            'Custom integrations'
+        ]
+    }
+};
+
+// Update total amount and features when plan or duration changes
+function updateCalculations() {
+    const planSelect = document.getElementById('plan_id');
+    const durationSelect = document.getElementById('duration_months');
+    const totalAmountSpan = document.getElementById('totalAmount');
+    const planFeaturesDiv = document.getElementById('planFeatures');
+    
+    const selectedOption = planSelect.options[planSelect.selectedIndex];
+    const price = parseFloat(selectedOption.dataset.price || 0);
+    const duration = parseInt(durationSelect.value || 1);
+    
+    // Calculate total
+    const total = price * duration;
+    totalAmountSpan.textContent = '€' + total.toFixed(2);
+    
+    // Update features
+    if (planSelect.value && planFeatures[planSelect.value]) {
+        const features = planFeatures[planSelect.value];
+        planFeaturesDiv.innerHTML = `
+            <h6 class="text-primary">${features.name} Plan</h6>
+            <ul class="mb-0">
+                ${features.features.map(feature => `<li>${feature}</li>`).join('')}
+            </ul>
+        `;
+    } else {
+        planFeaturesDiv.innerHTML = '<p class="text-muted mb-0">Select a plan to see features</p>';
+    }
+}
+
+// Add event listeners
+document.getElementById('plan_id').addEventListener('change', updateCalculations);
+document.getElementById('duration_months').addEventListener('change', updateCalculations);
+
+// Initial calculation
+updateCalculations();
+
+// Form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const email = document.getElementById('customer_email').value;
+    const plan = document.getElementById('plan_id').value;
+    
+    if (!email || !plan) {
+        e.preventDefault();
+        alert('Please fill in all required fields');
+        return;
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        e.preventDefault();
+        alert('Please enter a valid email address');
+        return;
+    }
+    
+    // Confirm creation
+    const duration = document.getElementById('duration_months').value;
+    const total = document.getElementById('totalAmount').textContent;
+    
+    if (!confirm(`Create license for ${email}?\nDuration: ${duration} months\nTotal: ${total}`)) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}

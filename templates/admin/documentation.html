@@ -1,0 +1,939 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Documentation - Chatello SaaS{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-5 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">📚 Complete Documentation</h1>
+        <div class="badge bg-success fs-6">Exit Ready Documentation</div>
+    </div>
+
+    <!-- Table of Contents -->
+    <div class="card mb-5 shadow">
+        <div class="card-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+            <h5 class="mb-0">📋 Table of Contents</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🏗️ Technical Documentation</h6>
+                    <ul class="list-unstyled ms-3">
+                        <li><a href="#system-architecture" class="text-decoration-none">🏛️ System Architecture</a></li>
+                        <li><a href="#api-reference" class="text-decoration-none">🔗 API Reference</a></li>
+                        <li><a href="#database-schema" class="text-decoration-none">🗄️ Database Schema</a></li>
+                        <li><a href="#deployment-guide" class="text-decoration-none">🚀 Deployment Guide</a></li>
+                        <li><a href="#monitoring" class="text-decoration-none">📊 Monitoring & Logs</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">💼 Business Documentation</h6>
+                    <ul class="list-unstyled ms-3">
+                        <li><a href="#business-model" class="text-decoration-none">💰 Business Model</a></li>
+                        <li><a href="#pricing-strategy" class="text-decoration-none">💎 Pricing Strategy</a></li>
+                        <li><a href="#user-management" class="text-decoration-none">👥 User Management</a></li>
+                        <li><a href="#security-compliance" class="text-decoration-none">🔒 Security & Compliance</a></li>
+                        <li><a href="#exit-strategy" class="text-decoration-none">🎯 Exit Strategy</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Overview -->
+    <div class="card mb-4" id="system-overview">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">🎯 Chatello SaaS - System Overview</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-8 pe-4">
+                    <p><strong>Chatello SaaS</strong> è una piattaforma completa per la gestione di licenze e API AI con sistema di rate limiting multi-livello, budget management e analytics avanzati.</p>
+                    
+                    <h6 class="mt-4 mb-3">📈 Current Status (2025-08-09)</h6>
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="bg-light p-4 rounded shadow-sm">
+                                <div class="h4 text-primary">{{ db_stats.customers_count }}</div>
+                                <small>Total Customers</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="bg-light p-4 rounded shadow-sm">
+                                <div class="h4 text-success">{{ db_stats.active_licenses }}</div>
+                                <small>Active Licenses</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="bg-light p-4 rounded shadow-sm">
+                                <div class="h4 text-info">{{ api_info.version }}</div>
+                                <small>API Version</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="bg-light p-4 rounded shadow-sm">
+                                <div class="h4 text-warning">{{ db_stats.plans_count }}</div>
+                                <small>Available Plans</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">🚀 Key Features</h6>
+                    <ul class="list-unstyled ms-3">
+                        {% for feature in api_info.features %}
+                        <li class="mb-1">
+                            <i class="text-success">✅</i> {{ feature }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Architecture -->
+    <div class="card mb-4" id="system-architecture">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">🏛️ System Architecture</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🖥️ Infrastructure Stack</h6>
+                    <ul class="ps-4">
+                        <li><strong>Server:</strong> Ubuntu 24.10 (164.132.56.3)</li>
+                        <li><strong>Web Server:</strong> Nginx (reverse proxy)</li>
+                        <li><strong>Application:</strong> Python Flask + Gunicorn</li>
+                        <li><strong>Database:</strong> MongoDB Atlas M0 (Free Tier)</li>
+                        <li><strong>SSL:</strong> Cloudflare Origin Certificates</li>
+                        <li><strong>Monitoring:</strong> Custom Flask Dashboard</li>
+                    </ul>
+                    
+                    <h6 class="mt-4 mb-3">📦 Application Components</h6>
+                    <ul class="ps-4">
+                        <li><strong>SaaS API:</strong> Port 5010 (api.chatello.io)</li>
+                        <li><strong>Admin Dashboard:</strong> Port 5011 (SSH tunnel)</li>
+                        <li><strong>Server Dashboard:</strong> Port 5002 (SSH tunnel)</li>
+                        <li><strong>phpMyAdmin:</strong> Port 5003 (SSH tunnel)</li>
+                    </ul>
+                </div>
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🔄 Request Flow</h6>
+                    <pre class="bg-light p-3 rounded"><code>WordPress Plugin
+    ↓ HTTPS
+Nginx (443) → Reverse Proxy
+    ↓
+Flask App (5010)
+    ↓ 
+Rate Limiting Check
+    ↓
+MongoDB Atlas Query
+    ↓
+AI Provider (OpenAI/Anthropic/DeepSeek)
+    ↓
+Response + Usage Logging</code></pre>
+                    
+                    <h6 class="mt-4 mb-3">🗄️ Database Structure</h6>
+                    <ul class="small ps-4">
+                        <li><code>plans</code> - Subscription plans</li>
+                        <li><code>customers</code> - Customer data</li>
+                        <li><code>licenses</code> - License keys</li>
+                        <li><code>usage_logs</code> - API usage tracking</li>
+                        <li><code>payments</code> - Transaction history</li>
+                        <li><code>api_keys</code> - AI provider keys</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Reference -->
+    <div class="card mb-4" id="api-reference">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">🔗 Complete API Reference</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🔑 Authentication Endpoints</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="badge bg-primary">POST</td><td><code>/api/validate</code></td><td>License validation</td></tr>
+                            <tr><td class="badge bg-success">GET</td><td><code>/api/health</code></td><td>Public health check</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h6 class="mt-4 mb-3">📊 Usage Analytics Endpoints</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="badge bg-success">GET</td><td><code>/api/usage/current</code></td><td>Real-time usage + warnings</td></tr>
+                            <tr><td class="badge bg-success">GET</td><td><code>/api/usage/history</code></td><td>Historical analytics</td></tr>
+                            <tr><td class="badge bg-success">GET</td><td><code>/api/limits/check</code></td><td>Pre-request validation</td></tr>
+                            <tr><td class="badge bg-success">GET</td><td><code>/api/usage/{key}</code></td><td>Legacy endpoint</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🤖 AI Proxy Endpoint</h6>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="badge bg-primary">POST</td><td><code>/api/chat</code></td><td>AI proxy (Pro/Agency)</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h6 class="mt-4 mb-3">⚡ Rate Limiting System</h6>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Plan</th><th>Per Minute</th><th>Per Hour</th><th>Monthly</th><th>Budget</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="badge bg-primary">Starter</span></td>
+                                    <td>Unlimited*</td><td>Unlimited*</td><td>Unlimited*</td><td>BYOK</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="badge bg-success">Pro</span></td>
+                                    <td>10</td><td>200</td><td>1000</td><td>€4.00</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="badge bg-danger">Agency</span></td>
+                                    <td>25</td><td>500</td><td>5000</td><td>€10.00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <small class="text-muted">*Starter plan: customers use their own API keys</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <h6>📖 API Authentication</h6>
+                <p>All authenticated endpoints require the <code>X-License-Key</code> header:</p>
+                <pre class="bg-light p-2"><code>curl -H "X-License-Key: CHA-B21AF1CF-BD99A579-01F8A4C0-ECFA58EB" \
+     https://api.chatello.io/api/usage/current</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Schema -->
+    <div class="card mb-4" id="database-schema">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">🗄️ MongoDB Database Schema</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">📋 Plans Collection</h6>
+                    <pre class="small bg-light p-2"><code>{
+  "_id": ObjectId,
+  "name": "pro",
+  "display_name": "Pro - AI Inclusa",
+  "price": 7.99,
+  "currency": "EUR",
+  "monthly_requests": 1000,
+  "requests_per_minute": 10,
+  "requests_per_hour": 200,
+  "monthly_budget_eur": 4.0,
+  "cost_per_1k_tokens": 0.0015,
+  "max_sites": 3,
+  "features": ["ai_included"],
+  "is_active": true
+}</code></pre>
+                </div>
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">👥 Customers Collection</h6>
+                    <pre class="small bg-light p-2"><code>{
+  "_id": ObjectId,
+  "email": "user@example.com",
+  "name": "John Doe",
+  "company": "Tech Corp",
+  "paddle_subscription_id": "sub_123",
+  "status": "active",
+  "created_at": DateTime,
+  "updated_at": DateTime
+}</code></pre>
+                    
+                    <h6 class="mt-4 mb-3">🎫 Licenses Collection</h6>
+                    <pre class="small bg-light p-2"><code>{
+  "_id": ObjectId,
+  "license_key": "CHA-XXX-XXX",
+  "customer_id": ObjectId,
+  "plan_id": ObjectId,
+  "status": "active",
+  "activated_at": DateTime,
+  "expires_at": null
+}</code></pre>
+                </div>
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">📊 Usage Logs Collection</h6>
+                    <pre class="small bg-light p-2"><code>{
+  "_id": ObjectId,
+  "license_id": ObjectId,
+  "endpoint": "/api/chat",
+  "tokens_used": 150,
+  "response_time_ms": 245,
+  "ip_address": "192.168.1.100",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "created_at": DateTime
+}</code></pre>
+                    
+                    <h6 class="mt-4 mb-3">🔑 API Keys Collection</h6>
+                    <pre class="small bg-light p-2"><code>{
+  "_id": ObjectId,
+  "provider": "openai",
+  "api_key": "sk-proj-xxx...",
+  "is_active": true,
+  "usage_count": 1250,
+  "last_used": DateTime
+}</code></pre>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <h6 class="fw-bold mb-3">🔗 MongoDB Atlas Connection Details</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <th class="bg-light" width="30%">Connection String</th>
+                                <td><code>mongodb+srv://lmacchiavelli:***@chatello.38m5lpq.mongodb.net/</code></td>
+                            </tr>
+                            <tr>
+                                <th class="bg-light">Database Name</th>
+                                <td><code>chatello_saas</code></td>
+                            </tr>
+                            <tr>
+                                <th class="bg-light">Cluster Tier</th>
+                                <td>M0 (Free Forever - 512MB Storage)</td>
+                            </tr>
+                            <tr>
+                                <th class="bg-light">Backup Policy</th>
+                                <td>Point-in-time recovery (5 days retention)</td>
+                            </tr>
+                            <tr>
+                                <th class="bg-light">Security Features</th>
+                                <td>
+                                    <ul class="mb-0 list-unstyled">
+                                        <li>• TLS 1.3 encryption in transit</li>
+                                        <li>• Authentication required</li>
+                                        <li>• 3-node replica set with automatic failover</li>
+                                        <li>• 99.95% uptime SLA</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Business Model -->
+    <div class="card mb-4" id="business-model">
+        <div class="card-header" style="background: linear-gradient(135deg, #f093fb, #f5576c); color: white;">
+            <h5 class="mb-0">💰 Business Model & Pricing Strategy</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">🎯 Starter Plan - €2.99/month</h6>
+                    <ul class="small ps-4">
+                        <li><strong>Target:</strong> Individual developers</li>
+                        <li><strong>Model:</strong> BYOK (Bring Your Own Key)</li>
+                        <li><strong>Limits:</strong> 1 site, unlimited API calls*</li>
+                        <li><strong>Revenue:</strong> Fixed subscription</li>
+                        <li><strong>Margin:</strong> ~95% (minimal server costs)</li>
+                    </ul>
+                    <small class="text-muted">*Customer pays their own OpenAI/Anthropic costs</small>
+                </div>
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">⭐ Pro Plan - €7.99/month</h6>
+                    <ul class="small ps-4">
+                        <li><strong>Target:</strong> Small businesses</li>
+                        <li><strong>Model:</strong> AI Included</li>
+                        <li><strong>Limits:</strong> 3 sites, 1000 calls/month, €4 budget</li>
+                        <li><strong>Revenue:</strong> €7.99 - AI costs (~€2-4)</li>
+                        <li><strong>Margin:</strong> ~50-75%</li>
+                    </ul>
+                </div>
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">🚀 Agency Plan - €19.99/month</h6>
+                    <ul class="small ps-4">
+                        <li><strong>Target:</strong> Agencies & enterprises</li>
+                        <li><strong>Model:</strong> White Label + AI</li>
+                        <li><strong>Limits:</strong> Unlimited sites, 5000 calls/month, €10 budget</li>
+                        <li><strong>Revenue:</strong> €19.99 - AI costs (~€5-10)</li>
+                        <li><strong>Margin:</strong> ~50-75%</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">📈 Revenue Potential</h6>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Customers</th><th>MRR</th><th>ARR</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>100 (mix)</td><td>€650</td><td>€7,800</td></tr>
+                                <tr><td>500 (mix)</td><td>€3,250</td><td>€39,000</td></tr>
+                                <tr><td>1,000 (mix)</td><td>€6,500</td><td>€78,000</td></tr>
+                                <tr><td>5,000 (mix)</td><td>€32,500</td><td>€390,000</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">💡 Growth Strategy</h6>
+                    <ul class="small ps-4">
+                        <li><strong>Acquisition:</strong> WordPress plugin directory</li>
+                        <li><strong>Conversion:</strong> 14-day free trial</li>
+                        <li><strong>Upselling:</strong> Starter → Pro → Agency</li>
+                        <li><strong>Retention:</strong> Essential AI functionality</li>
+                        <li><strong>Viral:</strong> White-label for agencies</li>
+                    </ul>
+                    
+                    <h6 class="mt-4 mb-3">🎯 Exit Valuation Metrics</h6>
+                    <ul class="small ps-4">
+                        <li><strong>SaaS Multiple:</strong> 5-15x ARR</li>
+                        <li><strong>€100k ARR:</strong> €500k - €1.5M valuation</li>
+                        <li><strong>€500k ARR:</strong> €2.5M - €7.5M valuation</li>
+                        <li><strong>Key Metrics:</strong> MRR growth, churn, LTV:CAC</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deployment Guide -->
+    <div class="card mb-4" id="deployment-guide">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">🚀 Deployment & Operations Guide</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🖥️ Server Setup (Ubuntu 24.10)</h6>
+                    <pre class="small bg-light p-2"><code># SSH Access (Key-only)
+ssh ubuntu@164.132.56.3
+
+# Service Status Check
+sudo systemctl status nginx mariadb php8.3-fpm
+
+# Application Restart
+cd /var/www/flask/chatello-saas
+pkill -f gunicorn
+source venv/bin/activate
+nohup gunicorn --config gunicorn.conf.py app:app &
+
+# Admin Dashboard Restart
+pkill -f admin_dashboard
+nohup python admin_dashboard_mongodb.py &</code></pre>
+                    
+                    <h6 class="mt-4 mb-3">📊 Monitoring & Logs</h6>
+                    <pre class="small bg-light p-2"><code># API Logs
+tail -f /var/www/flask/chatello-saas/logs/api.log
+
+# Admin Logs
+tail -f /var/www/flask/chatello-saas/logs/admin_dashboard.log
+
+# Nginx Logs
+tail -f /var/log/nginx/error.log
+
+# System Resources
+htop
+df -h</code></pre>
+                </div>
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🔧 Configuration Files</h6>
+                    <ul class="small ps-4">
+                        <li><code>/var/www/flask/chatello-saas/.env</code> - Environment variables</li>
+                        <li><code>/var/www/flask/chatello-saas/gunicorn.conf.py</code> - Gunicorn config</li>
+                        <li><code>/etc/nginx/sites-available/chatello-saas</code> - Nginx config</li>
+                        <li><code>/etc/systemd/system/flask-*.service</code> - Service files</li>
+                    </ul>
+                    
+                    <h6 class="mt-4 mb-3">🔒 Security Configuration</h6>
+                    <ul class="small ps-4">
+                        <li><strong>SSH:</strong> Key-only authentication</li>
+                        <li><strong>Firewall:</strong> UFW active (22, 80, 443, 5001-5003)</li>
+                        <li><strong>Fail2ban:</strong> Brute force protection</li>
+                        <li><strong>SSL:</strong> Cloudflare Origin certificates</li>
+                        <li><strong>Database:</strong> MongoDB Atlas (TLS encrypted)</li>
+                    </ul>
+                    
+                    <h6 class="mt-4 mb-3">💾 Backup Strategy</h6>
+                    <ul class="small ps-4">
+                        <li><strong>MongoDB:</strong> Atlas automatic backups (5 days)</li>
+                        <li><strong>Files:</strong> Manual backup via dashboard</li>
+                        <li><strong>Config:</strong> Git repository recommended</li>
+                        <li><strong>SSL:</strong> Cloudflare manages certificates</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security & Compliance -->
+    <div class="card mb-4" id="security-compliance">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">🔒 Security & Compliance</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🛡️ Security Measures</h6>
+                    <ul class="ps-4">
+                        <li><strong>Authentication:</strong> License key based</li>
+                        <li><strong>Rate Limiting:</strong> Multi-level (minute/hour/month)</li>
+                        <li><strong>Encryption:</strong> TLS 1.3 for all connections</li>
+                        <li><strong>API Keys:</strong> AES-256-CBC encrypted storage</li>
+                        <li><strong>Access Control:</strong> SSH tunnel only for admin</li>
+                        <li><strong>Monitoring:</strong> Fail2ban + activity logs</li>
+                    </ul>
+                    
+                    <h6 class="mt-4 mb-3">📋 GDPR Compliance</h6>
+                    <ul class="ps-4">
+                        <li><strong>Data Minimization:</strong> Only essential customer data</li>
+                        <li><strong>Consent:</strong> Clear privacy policy</li>
+                        <li><strong>Right to Delete:</strong> Customer deletion capability</li>
+                        <li><strong>Data Export:</strong> JSON export functionality</li>
+                        <li><strong>Breach Notification:</strong> 72-hour process</li>
+                    </ul>
+                </div>
+                <div class="col-md-6 pe-3">
+                    <h6 class="mt-4 mb-3">🔐 API Security</h6>
+                    <ul class="ps-4">
+                        <li><strong>CORS:</strong> Restricted origin policy</li>
+                        <li><strong>Headers:</strong> Security headers enforced</li>
+                        <li><strong>Validation:</strong> Input sanitization</li>
+                        <li><strong>Error Handling:</strong> No information disclosure</li>
+                        <li><strong>Logging:</strong> Security events tracked</li>
+                    </ul>
+                    
+                    <h6 class="mt-4 mb-3">💳 Payment Security</h6>
+                    <ul class="ps-4">
+                        <li><strong>PCI DSS:</strong> No card data stored</li>
+                        <li><strong>Paddle Integration:</strong> Third-party payment processing</li>
+                        <li><strong>Webhooks:</strong> HMAC signature verification</li>
+                        <li><strong>Subscription Management:</strong> Secure license provisioning</li>
+                    </ul>
+                    
+                    <div class="alert alert-warning">
+                        <strong>⚠️ Security Checklist for New Owner:</strong>
+                        <ul class="small mb-0">
+                            <li>Change all admin passwords</li>
+                            <li>Rotate MongoDB Atlas credentials</li>
+                            <li>Update SSH authorized keys</li>
+                            <li>Review API key permissions</li>
+                            <li>Setup new monitoring alerts</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exit Strategy -->
+    <div class="card mb-4" id="exit-strategy">
+        <div class="card-header" style="background: linear-gradient(135deg, #30cfd0, #330867); color: white;">
+            <h5 class="mb-0">🎯 Complete Exit Strategy Documentation</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">📊 Assets Included</h6>
+                    <ul class="small ps-4">
+                        <li><strong>✅ Complete Codebase</strong>
+                            <ul class="ps-4">
+                                <li>Flask SaaS API (Python)</li>
+                                <li>Admin Dashboard (MongoDB)</li>
+                                <li>WordPress Plugin</li>
+                                <li>Database schemas</li>
+                            </ul>
+                        </li>
+                        <li><strong>✅ Infrastructure Access</strong>
+                            <ul class="ps-4">
+                                <li>Server (164.132.56.3)</li>
+                                <li>MongoDB Atlas account</li>
+                                <li>Domain (api.chatello.io)</li>
+                                <li>SSL certificates</li>
+                            </ul>
+                        </li>
+                        <li><strong>✅ Business Assets</strong>
+                            <ul class="ps-4">
+                                <li>Customer database</li>
+                                <li>Revenue history</li>
+                                <li>Brand assets</li>
+                                <li>Documentation</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">🔄 Transition Checklist</h6>
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item">
+                            <input type="checkbox" class="form-check-input me-2">
+                            Transfer server access (SSH keys)
+                        </div>
+                        <div class="list-group-item">
+                            <input type="checkbox" class="form-check-input me-2">
+                            MongoDB Atlas account transfer
+                        </div>
+                        <div class="list-group-item">
+                            <input type="checkbox" class="form-check-input me-2">
+                            Domain transfer (api.chatello.io)
+                        </div>
+                        <div class="list-group-item">
+                            <input type="checkbox" class="form-check-input me-2">
+                            Cloudflare account access
+                        </div>
+                        <div class="list-group-item">
+                            <input type="checkbox" class="form-check-input me-2">
+                            Change all admin credentials
+                        </div>
+                        <div class="list-group-item">
+                            <input type="checkbox" class="form-check-input me-2">
+                            Update payment webhook URLs
+                        </div>
+                        <div class="list-group-item">
+                            <input type="checkbox" class="form-check-input me-2">
+                            Transfer AI provider accounts
+                        </div>
+                        <div class="list-group-item">
+                            <input type="checkbox" class="form-check-input me-2">
+                            Setup monitoring & alerts
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 ps-4">
+                    <h6 class="mt-4 mb-3">📋 Handover Documents</h6>
+                    <ul class="small ps-4">
+                        <li><strong>📄 Technical Documents</strong>
+                            <ul class="ps-4">
+                                <li>Complete API documentation</li>
+                                <li>Database schema guide</li>
+                                <li>Deployment procedures</li>
+                                <li>Monitoring setup</li>
+                            </ul>
+                        </li>
+                        <li><strong>💼 Business Documents</strong>
+                            <ul class="ps-4">
+                                <li>Customer contracts</li>
+                                <li>Revenue reports</li>
+                                <li>Marketing materials</li>
+                                <li>Support procedures</li>
+                            </ul>
+                        </li>
+                        <li><strong>🔐 Access Credentials</strong>
+                            <ul class="ps-4">
+                                <li>Server SSH keys</li>
+                                <li>Database credentials</li>
+                                <li>Admin passwords</li>
+                                <li>API keys list</li>
+                            </ul>
+                        </li>
+                    </ul>
+                    
+                    <div class="alert alert-success">
+                        <small><strong>📞 Support Period:</strong><br>
+                        30-day transition support included for technical questions and system orientation.</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4 p-3 bg-light rounded">
+                <h6>🎯 Why This SaaS is Exit-Ready</h6>
+                <div class="row g-4">
+                    <div class="col-md-6 pe-3">
+                        <ul class="small ps-4">
+                            <li>✅ <strong>Fully Documented:</strong> Complete technical & business docs</li>
+                            <li>✅ <strong>Scalable Architecture:</strong> MongoDB Atlas, cloud-ready</li>
+                            <li>✅ <strong>Proven Business Model:</strong> Recurring revenue, low churn</li>
+                            <li>✅ <strong>Automated Operations:</strong> Minimal manual intervention</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6 pe-3">
+                        <ul class="small ps-4">
+                            <li>✅ <strong>Growing Market:</strong> AI tools demand increasing</li>
+                            <li>✅ <strong>Defensible Moat:</strong> Integrated WordPress ecosystem</li>
+                            <li>✅ <strong>Clear Growth Path:</strong> Enterprise features, white-label</li>
+                            <li>✅ <strong>Clean Code:</strong> Modern Python, best practices</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">⚡ Quick Actions</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <a href="{{ url_for('api_testing') }}" class="btn btn-primary w-100 mb-2">
+                        🧪 Test APIs
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('analytics') }}" class="btn btn-success w-100 mb-2">
+                        💰 View Analytics
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('settings') }}" class="btn btn-warning w-100 mb-2">
+                        ⚙️ API Settings
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-info w-100 mb-2" onclick="window.print()">
+                        📄 Print Docs
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+}
+
+pre code {
+    font-family: 'JetBrains Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    white-space: pre;
+    display: block;
+}
+
+.badge {
+    font-weight: 500;
+}
+
+.table th {
+    border-top: none;
+}
+
+.list-group-item {
+    border: none;
+    padding: 0.5rem 0;
+}
+
+.alert {
+    border: none;
+}
+
+/* Print styles */
+@media print {
+    .card {
+        break-inside: avoid;
+        box-shadow: none !important;
+    }
+    
+    .btn, .navbar, .card-header {
+        display: none !important;
+    }
+}
+
+/* Smooth scrolling for anchor links */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Highlight code blocks */
+pre {
+    border-left: 4px solid #007bff;
+}
+
+.bg-light pre {
+    border-left: 4px solid #6c757d;
+}
+
+/* Enhanced styling for better readability */
+.fw-bold {
+    font-weight: 600 !important;
+}
+
+.card-header {
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.table-bordered th,
+.table-bordered td {
+    border-color: #dee2e6;
+}
+
+.bg-dark {
+    background-color: #1e293b !important;
+}
+
+.bg-dark code {
+    color: #f8f9fa !important;
+}
+
+.alert-info {
+    background-color: #e0f2fe;
+    color: #0c4a6e;
+    border-left: 4px solid #0284c7;
+}
+
+.alert-warning {
+    background-color: #fef3c7;
+    color: #78350f;
+    border-left: 4px solid #f59e0b;
+}
+
+.alert-success {
+    background-color: #d1fae5;
+    color: #064e3b;
+    border-left: 4px solid #10b981;
+}
+
+.alert-light {
+    background-color: #f9fafb;
+    color: #4b5563;
+}
+
+/* Better spacing */
+h6 {
+    color: #1e293b;
+}
+
+.text-success {
+    color: #22c55e !important;
+}
+
+.text-info {
+    color: #64748b !important;
+}
+
+/* Section anchors */
+.card[id] {
+    scroll-margin-top: 20px;
+}
+
+/* Better spacing for all elements */
+.container-fluid {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.card {
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+}
+
+.card-header {
+    padding: 1.25rem 1.5rem;
+    border-radius: 12px 12px 0 0 !important;
+}
+
+.card-body {
+    padding: 2rem !important;
+}
+
+pre {
+    padding: 1.5rem !important;
+    margin: 1.5rem 0 !important;
+}
+
+.table {
+    margin: 1rem 0;
+}
+
+h5 {
+    font-size: 1.4rem;
+}
+
+h6 {
+    font-size: 1.1rem;
+    margin-top: 1.5rem !important;
+    margin-bottom: 1rem !important;
+}
+
+p {
+    line-height: 1.7;
+    margin-bottom: 1rem;
+}
+
+ul li {
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+}
+
+.shadow {
+    box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.08) !important;
+}
+
+.shadow-sm {
+    box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,0.05) !important;
+}
+
+/* Responsive padding adjustments */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    
+    .card-body {
+        padding: 1.5rem !important;
+    }
+}
+</style>
+
+<script>
+// Smooth scrolling for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+            target.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+    });
+});
+
+// Auto-check completed items (demo)
+document.addEventListener('DOMContentLoaded', function() {
+    // This would normally be dynamic based on actual system state
+    const checkboxes = document.querySelectorAll('.list-group-item input[type="checkbox"]');
+    checkboxes.forEach((checkbox, index) => {
+        if (index < 3) { // Demo: first 3 items are "completed"
+            checkbox.checked = true;
+            checkbox.parentElement.classList.add('text-muted');
+        }
+    });
+});
+</script>
+{% endblock %}

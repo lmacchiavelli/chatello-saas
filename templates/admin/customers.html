@@ -1,0 +1,313 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Customers - Chatello Admin{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h3>👥 Customer Management</h3>
+    <p>Total Customers: <strong>{{ total_customers }}</strong></p>
+    
+    {% if customers %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Active Licenses</th>
+                    <th>Paddle ID</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for customer in customers %}
+                <tr>
+                    <td><strong>{{ customer.name }}</strong></td>
+                    <td>{{ customer.email }}</td>
+                    <td>
+                        <span style="background: #e3f2fd; color: #1565c0; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.8rem;">
+                            {{ customer.active_licenses }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if customer.paddle_customer_id and customer.paddle_customer_id != 'N/A' %}
+                            <code>{{ customer.paddle_customer_id }}</code>
+                        {% else %}
+                            <span style="color: #999;">No Paddle ID</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ customer.created_at.isoformat()[:10] if customer.created_at else 'N/A' }}</td>
+                    <td>
+                        <button class="btn btn-primary" onclick="viewCustomer('{{ customer._id }}')">View</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+                <a href="{{ url_for('customers', page=page-1) }}">&laquo; Previous</a>
+            {% endif %}
+            
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                    <span class="current">{{ p }}</span>
+                {% else %}
+                    <a href="{{ url_for('customers', page=p) }}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page < total_pages %}
+                <a href="{{ url_for('customers', page=page+1) }}">Next &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+    {% else %}
+        <div style="text-align: center; padding: 3rem; color: #666;">
+            <h4>No customers found</h4>
+            <p>Customers will appear here once they start using your service.</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Create Customer Modal (Simple version) -->
+<div class="card">
+    <h3>➕ Create New Customer</h3>
+    <form onsubmit="createCustomer(event)" style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 1rem; align-items: end;">
+        <div>
+            <label for="customer_name">Name:</label>
+            <input type="text" id="customer_name" placeholder="Customer Name" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div>
+            <label for="customer_email">Email:</label>
+            <input type="email" id="customer_email" placeholder="customer@example.com" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <button type="submit" class="btn btn-primary">Create Customer</button>
+    </form>
+</div>
+
+<!-- Customer Details Modal -->
+<div id="customerModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 2rem; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Customer Details</h3>
+            <button onclick="closeCustomerModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #999;">&times;</button>
+        </div>
+        
+        <div id="customerDetailsContent">
+            <!-- Content will be loaded here -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.detail-row {
+    display: flex;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.detail-label {
+    font-weight: 600;
+    color: #666;
+    min-width: 150px;
+}
+
+.detail-value {
+    color: #333;
+    word-break: break-all;
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+}
+
+.copyable {
+    background: #f5f5f5;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+.license-card {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.license-status {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.status-active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-expired {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.loading-spinner {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+}
+</style>
+
+<script>
+function viewCustomer(customerId) {
+    // Show modal with loading spinner
+    document.getElementById('customerModal').style.display = 'block';
+    document.getElementById('customerDetailsContent').innerHTML = '<div class="loading-spinner">Loading customer details...</div>';
+    
+    // Fetch customer details from API
+    fetch('/api/get_customer/' + customerId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayCustomerDetails(data.customer);
+            } else {
+                document.getElementById('customerDetailsContent').innerHTML = '<div style="color: red;">Error: ' + data.error + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('customerDetailsContent').innerHTML = '<div style="color: red;">Error loading customer details</div>';
+        });
+}
+
+function displayCustomerDetails(customer) {
+    let html = `
+        <div class="detail-row">
+            <div class="detail-label">Customer ID:</div>
+            <div class="detail-value"><span class="copyable">${customer.id}</span></div>
+        </div>
+        
+        <div class="detail-row">
+            <div class="detail-label">Name:</div>
+            <div class="detail-value">${customer.name}</div>
+        </div>
+        
+        <div class="detail-row">
+            <div class="detail-label">Email:</div>
+            <div class="detail-value"><span class="copyable">${customer.email}</span></div>
+        </div>
+        
+        <div class="detail-row">
+            <div class="detail-label">Paddle Customer ID:</div>
+            <div class="detail-value"><span class="copyable">${customer.paddle_customer_id || 'N/A'}</span></div>
+        </div>
+        
+        <div class="detail-row">
+            <div class="detail-label">Created:</div>
+            <div class="detail-value">${customer.created_at ? new Date(customer.created_at).toLocaleString() : 'N/A'}</div>
+        </div>
+    `;
+    
+    // Add licenses section
+    if (customer.licenses && customer.licenses.length > 0) {
+        html += '<h4 style="margin-top: 1.5rem; margin-bottom: 1rem;">Active Licenses</h4>';
+        
+        customer.licenses.forEach(license => {
+            const statusClass = license.status === 'active' ? 'status-active' : 'status-expired';
+            html += `
+                <div class="license-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span class="copyable">${license.license_key}</span>
+                        <span class="license-status ${statusClass}">${license.status}</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #666;">
+                        <div>Plan: <strong>${license.plan}</strong></div>
+                        <div>Usage: ${license.usage_count} / ${license.usage_limit || '∞'}</div>
+                        <div>Created: ${license.created_at ? new Date(license.created_at).toLocaleDateString() : 'N/A'}</div>
+                        ${license.expires_at ? '<div>Expires: ' + new Date(license.expires_at).toLocaleDateString() + '</div>' : ''}
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        html += '<div style="margin-top: 1.5rem; padding: 1rem; background: #f9f9f9; border-radius: 6px; text-align: center; color: #666;">No licenses found for this customer</div>';
+    }
+    
+    // Add metadata if exists
+    if (customer.metadata && Object.keys(customer.metadata).length > 0) {
+        html += '<h4 style="margin-top: 1.5rem; margin-bottom: 1rem;">Metadata</h4>';
+        html += '<div style="background: #f5f5f5; padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">';
+        html += '<pre>' + JSON.stringify(customer.metadata, null, 2) + '</pre>';
+        html += '</div>';
+    }
+    
+    document.getElementById('customerDetailsContent').innerHTML = html;
+}
+
+function closeCustomerModal() {
+    document.getElementById('customerModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+document.getElementById('customerModal').addEventListener('click', function(event) {
+    if (event.target === this) {
+        closeCustomerModal();
+    }
+});
+
+// Close modal with ESC key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape' && document.getElementById('customerModal').style.display === 'block') {
+        closeCustomerModal();
+    }
+});
+
+function createCustomer(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('customer_name').value;
+    const email = document.getElementById('customer_email').value;
+    
+    if (!name || !email) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    fetch('/api/create_customer', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: name,
+            email: email
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Customer created successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error creating customer');
+    });
+}
+</script>
+{% endblock %}

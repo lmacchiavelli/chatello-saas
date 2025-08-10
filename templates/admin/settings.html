@@ -1,0 +1,338 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Settings - API Keys Management{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h3>🔑 API Keys Management</h3>
+    <p style="color: #666; margin-bottom: 2rem;">
+        Configure the API keys that will be used by Pro and Agency plan customers. 
+        These keys are shared across all users who don't bring their own keys (BYOK).
+    </p>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div style="padding: 1rem; margin-bottom: 1rem; border-radius: 6px; 
+                            background: {% if category == 'success' %}#d4edda{% elif category == 'error' %}#f8d7da{% else %}#d1ecf1{% endif %}; 
+                            color: {% if category == 'success' %}#155724{% elif category == 'error' %}#721c24{% else %}#0c5460{% endif %}; 
+                            border-left: 4px solid {% if category == 'success' %}#28a745{% elif category == 'error' %}#dc3545{% else %}#17a2b8{% endif %};">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <form method="POST" action="{{ url_for('update_api_keys') }}" onsubmit="return confirmUpdate()">
+        
+        <!-- Default AI Provider Selection -->
+        <div style="margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; color: white;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                <span style="font-size: 1.5rem;">⚙️</span>
+                <h4 style="margin: 0;">Default AI Provider & Configuration</h4>
+                <span style="margin-left: auto; padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.8rem;">
+                    Primary SaaS
+                </span>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Default Provider:</label>
+                    <select name="default_ai_provider" id="default_ai_provider"
+                            style="width: 100%; padding: 0.8rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; 
+                                   background: rgba(255,255,255,0.1); color: white; font-size: 0.9rem;">
+                        <option value="openai" {% if api_keys.default_provider == 'openai' %}selected{% endif %}>🤖 OpenAI</option>
+                        <option value="anthropic" {% if api_keys.default_provider == 'anthropic' %}selected{% endif %}>🧠 Anthropic</option>
+                        <option value="deepseek" {% if api_keys.default_provider == 'deepseek' %}selected{% endif %}>🔍 DeepSeek</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Fallback Provider:</label>
+                    <select name="fallback_ai_provider" id="fallback_ai_provider"
+                            style="width: 100%; padding: 0.8rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; 
+                                   background: rgba(255,255,255,0.1); color: white; font-size: 0.9rem;">
+                        <option value="">None</option>
+                        <option value="openai" {% if api_keys.fallback_provider == 'openai' %}selected{% endif %}>🤖 OpenAI</option>
+                        <option value="anthropic" {% if api_keys.fallback_provider == 'anthropic' %}selected{% endif %}>🧠 Anthropic</option>
+                        <option value="deepseek" {% if api_keys.fallback_provider == 'deepseek' %}selected{% endif %}>🔍 DeepSeek</option>
+                    </select>
+                </div>
+            </div>
+            
+            <small style="opacity: 0.9;">The default provider will be used for all Pro/Agency requests. If it fails, the fallback provider will be used automatically.</small>
+        </div>
+
+        <!-- OpenAI API Key -->
+        <div style="margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%); border-radius: 8px; color: white;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                <span style="font-size: 1.5rem;">🤖</span>
+                <h4 style="margin: 0;">OpenAI Configuration</h4>
+                <span style="margin-left: auto; padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.8rem;">
+                    GPT Models
+                </span>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">API Key:</label>
+                <input type="password" 
+                       name="openai_api_key" 
+                       id="openai_api_key"
+                       value="{{ api_keys.openai_api_key }}"
+                       placeholder="sk-proj-..." 
+                       style="width: 100%; padding: 0.8rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; 
+                              background: rgba(255,255,255,0.1); color: white; font-family: monospace; font-size: 0.9rem;"
+                       autocomplete="off">
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Default Model:</label>
+                <input type="text" 
+                       name="openai_model" 
+                       id="openai_model"
+                       value="{{ api_keys.openai_model or 'gpt-4o-mini' }}"
+                       placeholder="gpt-4o, gpt-4o-mini, gpt-3.5-turbo"
+                       style="width: 100%; padding: 0.8rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; 
+                              background: rgba(255,255,255,0.1); color: white; font-family: monospace; font-size: 0.9rem;"
+                       autocomplete="off">
+                <small style="opacity: 0.8; display: block; margin-top: 0.3rem;">Popular: gpt-4o, gpt-4o-mini, gpt-3.5-turbo, gpt-4-turbo</small>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <small style="opacity: 0.9;">Used for GPT models when OpenAI is selected as provider</small>
+                <button type="button" onclick="toggleVisibility('openai_api_key')" 
+                        style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.3rem 0.8rem; 
+                               border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                    👁️ Show/Hide
+                </button>
+            </div>
+        </div>
+        
+        <!-- Anthropic API Key -->
+        <div style="margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%); border-radius: 8px; color: white;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                <span style="font-size: 1.5rem;">🧠</span>
+                <h4 style="margin: 0;">Anthropic Configuration</h4>
+                <span style="margin-left: auto; padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.8rem;">
+                    Claude Models
+                </span>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">API Key:</label>
+                <input type="password" 
+                       name="anthropic_api_key" 
+                       id="anthropic_api_key"
+                       value="{{ api_keys.anthropic_api_key }}"
+                       placeholder="sk-ant-api03-..." 
+                       style="width: 100%; padding: 0.8rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; 
+                              background: rgba(255,255,255,0.1); color: white; font-family: monospace; font-size: 0.9rem;"
+                       autocomplete="off">
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Default Model:</label>
+                <input type="text" 
+                       name="anthropic_model" 
+                       id="anthropic_model"
+                       value="{{ api_keys.anthropic_model or 'claude-3-5-sonnet-20241022' }}"
+                       placeholder="claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022"
+                       style="width: 100%; padding: 0.8rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; 
+                              background: rgba(255,255,255,0.1); color: white; font-family: monospace; font-size: 0.9rem;"
+                       autocomplete="off">
+                <small style="opacity: 0.8; display: block; margin-top: 0.3rem;">Popular: claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022, claude-3-opus-20240229</small>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <small style="opacity: 0.9;">Used for Claude models when Anthropic is selected as provider</small>
+                <button type="button" onclick="toggleVisibility('anthropic_api_key')" 
+                        style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.3rem 0.8rem; 
+                               border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                    👁️ Show/Hide
+                </button>
+            </div>
+        </div>
+        
+        <!-- DeepSeek API Key -->
+        <div style="margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, #fd79a8 0%, #e84393 100%); border-radius: 8px; color: white;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                <span style="font-size: 1.5rem;">🔍</span>
+                <h4 style="margin: 0;">DeepSeek Configuration</h4>
+                <span style="margin-left: auto; padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.8rem;">
+                    DeepSeek Models
+                </span>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">API Key:</label>
+                <input type="password" 
+                       name="deepseek_api_key" 
+                       id="deepseek_api_key"
+                       value="{{ api_keys.deepseek_api_key }}"
+                       placeholder="sk-..." 
+                       style="width: 100%; padding: 0.8rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; 
+                              background: rgba(255,255,255,0.1); color: white; font-family: monospace; font-size: 0.9rem;"
+                       autocomplete="off">
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Default Model:</label>
+                <input type="text" 
+                       name="deepseek_model" 
+                       id="deepseek_model"
+                       value="{{ api_keys.deepseek_model or 'deepseek-chat' }}"
+                       placeholder="deepseek-chat, deepseek-coder"
+                       style="width: 100%; padding: 0.8rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; 
+                              background: rgba(255,255,255,0.1); color: white; font-family: monospace; font-size: 0.9rem;"
+                       autocomplete="off">
+                <small style="opacity: 0.8; display: block; margin-top: 0.3rem;">Popular: deepseek-chat, deepseek-coder, deepseek-reasoner</small>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <small style="opacity: 0.9;">Used for DeepSeek models when DeepSeek is selected as provider</small>
+                <button type="button" onclick="toggleVisibility('deepseek_api_key')" 
+                        style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.3rem 0.8rem; 
+                               border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                    👁️ Show/Hide
+                </button>
+            </div>
+        </div>
+        
+        <!-- Submit Button -->
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button type="submit" class="btn btn-primary" style="padding: 0.8rem 2rem; font-size: 1rem; background: #27ae60;">
+                💾 Save API Keys
+            </button>
+            <button type="button" onclick="testAllKeys()" class="btn btn-primary" style="padding: 0.8rem 2rem; font-size: 1rem; background: #3498db;">
+                🧪 Test All Keys
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- API Key Status -->
+<div class="card" style="margin-top: 2rem;">
+    <h3>📊 API Key Status</h3>
+    <div id="keyStatus" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem;">
+        <div style="padding: 1rem; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #6c757d;">
+            <h5 style="margin: 0 0 0.5rem 0; color: #495057;">OpenAI</h5>
+            <div id="openai_status" style="color: #6c757d;">
+                {% if api_keys.openai_configured %}
+                    <span style="color: #28a745;">✅ Configured</span>
+                {% else %}
+                    <span style="color: #dc3545;">❌ Not configured</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div style="padding: 1rem; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #6c757d;">
+            <h5 style="margin: 0 0 0.5rem 0; color: #495057;">Anthropic</h5>
+            <div id="anthropic_status" style="color: #6c757d;">
+                {% if api_keys.anthropic_configured %}
+                    <span style="color: #28a745;">✅ Configured</span>
+                {% else %}
+                    <span style="color: #dc3545;">❌ Not configured</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div style="padding: 1rem; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #6c757d;">
+            <h5 style="margin: 0 0 0.5rem 0; color: #495057;">DeepSeek</h5>
+            <div id="deepseek_status" style="color: #6c757d;">
+                {% if api_keys.deepseek_configured %}
+                    <span style="color: #28a745;">✅ Configured</span>
+                {% else %}
+                    <span style="color: #dc3545;">❌ Not configured</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Usage Information -->
+<div class="card" style="margin-top: 2rem;">
+    <h3>ℹ️ Information</h3>
+    <div style="padding: 1rem; background: #e7f3ff; border-radius: 6px; border-left: 4px solid #0066cc;">
+        <h4 style="margin: 0 0 1rem 0; color: #0066cc;">How API Keys Work in Chatello SaaS</h4>
+        <ul style="margin: 0; padding-left: 1.5rem; color: #495057;">
+            <li><strong>Starter Plan (€2.99/month):</strong> Users provide their own API keys (BYOK - Bring Your Own Key)</li>
+            <li><strong>Pro Plan (€7.99/month):</strong> Uses the API keys configured here - AI included</li>
+            <li><strong>Agency Plan (€19.99/month):</strong> Uses the API keys configured here - AI included + white label</li>
+        </ul>
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #cce5ff;">
+            <strong style="color: #0066cc;">⚠️ Important:</strong>
+            <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                <li>Changes to API keys take effect immediately</li>
+                <li>Invalid keys will cause failures for Pro/Agency users</li>
+                <li>Always test keys before saving</li>
+                <li>Keys are encrypted and stored securely in the .env file</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleVisibility(fieldId) {
+    const field = document.getElementById(fieldId);
+    if (field.type === 'password') {
+        field.type = 'text';
+    } else {
+        field.type = 'password';
+    }
+}
+
+function confirmUpdate() {
+    return confirm('Are you sure you want to update the API keys? This will affect all Pro and Agency plan users immediately.');
+}
+
+function testAllKeys() {
+    const openaiKey = document.getElementById('openai_api_key').value;
+    const anthropicKey = document.getElementById('anthropic_api_key').value;
+    const deepseekKey = document.getElementById('deepseek_api_key').value;
+    
+    // Show loading
+    document.getElementById('openai_status').innerHTML = '⏳ Testing...';
+    document.getElementById('anthropic_status').innerHTML = '⏳ Testing...';
+    document.getElementById('deepseek_status').innerHTML = '⏳ Testing...';
+    
+    // Test keys via API
+    fetch('/api/test_api_keys', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            openai_api_key: openaiKey,
+            anthropic_api_key: anthropicKey,
+            deepseek_api_key: deepseekKey
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Update status for each key
+        if (data.openai) {
+            document.getElementById('openai_status').innerHTML = data.openai.valid ? 
+                '<span style="color: #28a745;">✅ Valid</span>' : 
+                '<span style="color: #dc3545;">❌ Invalid: ' + (data.openai.error || 'Unknown error') + '</span>';
+        }
+        
+        if (data.anthropic) {
+            document.getElementById('anthropic_status').innerHTML = data.anthropic.valid ? 
+                '<span style="color: #28a745;">✅ Valid</span>' : 
+                '<span style="color: #dc3545;">❌ Invalid: ' + (data.anthropic.error || 'Unknown error') + '</span>';
+        }
+        
+        if (data.deepseek) {
+            document.getElementById('deepseek_status').innerHTML = data.deepseek.valid ? 
+                '<span style="color: #28a745;">✅ Valid</span>' : 
+                '<span style="color: #dc3545;">❌ Invalid: ' + (data.deepseek.error || 'Unknown error') + '</span>';
+        }
+    })
+    .catch(error => {
+        alert('Error testing API keys: ' + error.message);
+    });
+}
+</script>
+{% endblock %}

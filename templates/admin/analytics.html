@@ -1,0 +1,425 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Analytics & Finance - Chatello SaaS{% endblock %}
+
+{% block content %}
+<!-- Main Financial Metrics -->
+<div class="stats-grid" style="margin-bottom: 2rem;">
+    <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <div class="stat-label" style="color: rgba(255,255,255,0.9); font-size: 0.9rem;">Monthly Recurring Revenue</div>
+        <div class="stat-number" style="font-size: 2.5rem; color: white;">€{{ metrics.mrr | round(2) }}</div>
+        <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.9;">
+            {% if metrics.mrr_growth > 0 %}
+                <span style="color: #4ade80;">↑ {{ metrics.mrr_growth }}%</span> vs last month
+            {% elif metrics.mrr_growth < 0 %}
+                <span style="color: #f87171;">↓ {{ metrics.mrr_growth|abs }}%</span> vs last month
+            {% else %}
+                <span>→ 0%</span> vs last month
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+        <div class="stat-label" style="color: rgba(255,255,255,0.9); font-size: 0.9rem;">Annual Recurring Revenue</div>
+        <div class="stat-number" style="font-size: 2.5rem; color: white;">€{{ metrics.arr | round(2) }}</div>
+        <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.9;">
+            Projected: €{{ (metrics.arr * 1.2) | round(2) }}
+        </div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+        <div class="stat-label" style="color: rgba(255,255,255,0.9); font-size: 0.9rem;">Active Subscriptions</div>
+        <div class="stat-number" style="font-size: 2.5rem; color: white;">{{ metrics.total_active }}</div>
+        <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.9;">
+            {{ metrics.new_this_month }} new this month
+        </div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); color: white;">
+        <div class="stat-label" style="color: rgba(255,255,255,0.9); font-size: 0.9rem;">Average Revenue Per User</div>
+        <div class="stat-number" style="font-size: 2.5rem; color: white;">€{{ metrics.arpu | round(2) }}</div>
+        <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.9;">
+            LTV: €{{ metrics.ltv | round(2) }}
+        </div>
+    </div>
+</div>
+
+<!-- Revenue Charts -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+    <div class="card">
+        <h3>📈 MRR Growth (Last 12 Months)</h3>
+        <div style="position: relative; height: 300px;">
+            <canvas id="mrrChart"></canvas>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+            <div style="text-align: center;">
+                <div style="font-size: 0.8rem; color: #666;">This Month</div>
+                <div style="font-weight: bold; color: #667eea;">€{{ metrics.mrr | round(2) }}</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 0.8rem; color: #666;">Last Month</div>
+                <div style="font-weight: bold;">€{{ metrics.last_month_mrr | round(2) }}</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 0.8rem; color: #666;">3 Months Ago</div>
+                <div style="font-weight: bold;">€{{ metrics.three_months_ago_mrr | round(2) }}</div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 0.8rem; color: #666;">YoY Growth</div>
+                <div style="font-weight: bold; color: {% if metrics.yoy_growth > 0 %}#4ade80{% else %}#f87171{% endif %};">
+                    {{ metrics.yoy_growth }}%
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3>💎 Revenue by Plan</h3>
+        <div style="position: relative; height: 300px;">
+            <canvas id="planRevenueChart"></canvas>
+        </div>
+        <div style="margin-top: 1rem;">
+            {% for plan, data in metrics.revenue_by_plan.items() %}
+            <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #eee;">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="width: 12px; height: 12px; border-radius: 3px; background: 
+                        {% if plan == 'starter' %}#3498db
+                        {% elif plan == 'pro' %}#2ecc71
+                        {% else %}#e74c3c{% endif %};"></div>
+                    {{ plan.title() }}
+                </span>
+                <div style="text-align: right;">
+                    <div style="font-weight: bold;">€{{ data.revenue | round(2) }}</div>
+                    <div style="font-size: 0.75rem; color: #666;">{{ data.count }} customers</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Customer Metrics -->
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
+    <div class="card">
+        <h3>🔄 Churn & Retention</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+            <div style="text-align: center; padding: 1rem; background: #fef2f2; border-radius: 8px;">
+                <div style="font-size: 2rem; font-weight: bold; color: #dc2626;">{{ metrics.churn_rate }}%</div>
+                <div style="font-size: 0.85rem; color: #666;">Monthly Churn</div>
+            </div>
+            <div style="text-align: center; padding: 1rem; background: #f0fdf4; border-radius: 8px;">
+                <div style="font-size: 2rem; font-weight: bold; color: #16a34a;">{{ metrics.retention_rate }}%</div>
+                <div style="font-size: 0.85rem; color: #666;">Retention Rate</div>
+            </div>
+        </div>
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span style="color: #666;">Churned this month:</span>
+                <strong>{{ metrics.churned_this_month }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: #666;">At risk:</span>
+                <strong style="color: #f59e0b;">{{ metrics.at_risk_customers }}</strong>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3>💰 Customer Value</h3>
+        <div style="margin-top: 1rem;">
+            <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px; margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size: 0.85rem; color: #666;">Lifetime Value</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #667eea;">€{{ metrics.ltv | round(2) }}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 0.85rem; color: #666;">CAC</div>
+                        <div style="font-size: 1.5rem; font-weight: bold;">€{{ metrics.cac | round(2) }}</div>
+                    </div>
+                </div>
+            </div>
+            <div style="padding: 0.5rem; background: {% if metrics.ltv_cac_ratio > 3 %}#f0fdf4{% else %}#fef2f2{% endif %}; border-radius: 6px; text-align: center;">
+                <div style="font-size: 0.85rem; color: #666;">LTV:CAC Ratio</div>
+                <div style="font-size: 1.25rem; font-weight: bold; color: {% if metrics.ltv_cac_ratio > 3 %}#16a34a{% else %}#dc2626{% endif %};">
+                    {{ metrics.ltv_cac_ratio | round(1) }}:1
+                </div>
+                <div style="font-size: 0.75rem; color: #666; margin-top: 0.25rem;">
+                    {% if metrics.ltv_cac_ratio > 3 %}✅ Healthy{% else %}⚠️ Needs improvement{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3>🎯 Monthly Goals</h3>
+        <div style="margin-top: 1rem;">
+            <div style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="font-size: 0.85rem;">MRR Target</span>
+                    <span style="font-size: 0.85rem; font-weight: bold;">€{{ metrics.mrr_target | round(2) }}</span>
+                </div>
+                <div style="background: #e5e7eb; border-radius: 10px; height: 10px; overflow: hidden;">
+                    <div style="background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; width: {{ (metrics.mrr / metrics.mrr_target * 100) | round }}%; transition: width 0.5s;"></div>
+                </div>
+                <div style="text-align: center; margin-top: 0.25rem; font-size: 0.75rem; color: #666;">
+                    {{ (metrics.mrr / metrics.mrr_target * 100) | round }}% achieved
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="font-size: 0.85rem;">New Customers</span>
+                    <span style="font-size: 0.85rem; font-weight: bold;">{{ metrics.new_customers_target }}</span>
+                </div>
+                <div style="background: #e5e7eb; border-radius: 10px; height: 10px; overflow: hidden;">
+                    <div style="background: linear-gradient(90deg, #3b82f6, #8b5cf6); height: 100%; width: {{ (metrics.new_this_month / metrics.new_customers_target * 100) | round }}%; transition: width 0.5s;"></div>
+                </div>
+                <div style="text-align: center; margin-top: 0.25rem; font-size: 0.75rem; color: #666;">
+                    {{ metrics.new_this_month }}/{{ metrics.new_customers_target }} customers
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions & Upcoming Actions -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+    <div class="card">
+        <h3>💳 Recent Transactions</h3>
+        <div style="max-height: 400px; overflow-y: auto;">
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th style="position: sticky; top: 0; background: white;">Customer</th>
+                        <th style="position: sticky; top: 0; background: white;">Plan</th>
+                        <th style="position: sticky; top: 0; background: white;">Amount</th>
+                        <th style="position: sticky; top: 0; background: white;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in recent_transactions %}
+                    <tr>
+                        <td>
+                            <div style="font-size: 0.9rem;">{{ transaction.customer_name }}</div>
+                            <div style="font-size: 0.75rem; color: #666;">{{ transaction.date }}</div>
+                        </td>
+                        <td>
+                            <span style="background: #e3f2fd; color: #1565c0; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem;">
+                                {{ transaction.plan }}
+                            </span>
+                        </td>
+                        <td style="font-weight: bold;">€{{ transaction.amount }}</td>
+                        <td>
+                            {% if transaction.status == 'completed' %}
+                                <span style="color: #16a34a;">✅</span>
+                            {% elif transaction.status == 'pending' %}
+                                <span style="color: #f59e0b;">⏳</span>
+                            {% else %}
+                                <span style="color: #dc2626;">❌</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3>⚠️ Actions Required</h3>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div style="padding: 1rem; background: #fef2f2; border-radius: 8px; border-left: 4px solid #dc2626;">
+                <div style="font-weight: bold; color: #dc2626; margin-bottom: 0.25rem;">
+                    {{ metrics.failed_payments }} Failed Payments
+                </div>
+                <div style="font-size: 0.85rem; color: #666;">
+                    Total value: €{{ metrics.failed_payments_value | round(2) }}
+                </div>
+                <button class="btn btn-primary" style="margin-top: 0.5rem; font-size: 0.85rem; padding: 0.25rem 0.75rem;">
+                    Retry Payments
+                </button>
+            </div>
+            
+            <div style="padding: 1rem; background: #fefce8; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <div style="font-weight: bold; color: #d97706; margin-bottom: 0.25rem;">
+                    {{ metrics.expiring_trials }} Expiring Trials
+                </div>
+                <div style="font-size: 0.85rem; color: #666;">
+                    Next 7 days - potential €{{ metrics.expiring_trials_value | round(2) }}
+                </div>
+                <button class="btn btn-primary" style="margin-top: 0.5rem; font-size: 0.85rem; padding: 0.25rem 0.75rem;">
+                    Send Conversion Emails
+                </button>
+            </div>
+            
+            <div style="padding: 1rem; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                <div style="font-weight: bold; color: #1e40af; margin-bottom: 0.25rem;">
+                    {{ metrics.upcoming_renewals }} Upcoming Renewals
+                </div>
+                <div style="font-size: 0.85rem; color: #666;">
+                    Next 30 days - €{{ metrics.upcoming_renewals_value | round(2) }}
+                </div>
+                <button class="btn btn-primary" style="margin-top: 0.5rem; font-size: 0.85rem; padding: 0.25rem 0.75rem;">
+                    View Details
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Section -->
+<div class="card" style="margin-top: 2rem;">
+    <h3>📊 Export & Reports</h3>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <button onclick="exportFinancialData('csv')" class="btn btn-primary">
+            📥 Export to CSV
+        </button>
+        <button onclick="exportFinancialData('excel')" class="btn btn-primary">
+            📑 Export to Excel
+        </button>
+        <button onclick="generateMonthlyReport()" class="btn btn-primary" style="background: #667eea;">
+            📄 Generate Monthly Report
+        </button>
+        <button onclick="sendFinancialSummary()" class="btn btn-primary" style="background: #764ba2;">
+            📧 Email Summary
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Chart Data
+const mrrData = {
+    labels: {{ metrics.mrr_history.labels | tojson }},
+    datasets: [{
+        label: 'MRR',
+        data: {{ metrics.mrr_history.values | tojson }},
+        borderColor: '#667eea',
+        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+        tension: 0.4,
+        fill: true
+    }]
+};
+
+const planRevenueData = {
+    labels: ['Starter', 'Pro', 'Agency'],
+    datasets: [{
+        data: [
+            {{ metrics.revenue_by_plan.starter.revenue }},
+            {{ metrics.revenue_by_plan.pro.revenue }},
+            {{ metrics.revenue_by_plan.agency.revenue }}
+        ],
+        backgroundColor: ['#3498db', '#2ecc71', '#e74c3c']
+    }]
+};
+
+// Initialize Charts
+document.addEventListener('DOMContentLoaded', function() {
+    // MRR Growth Chart
+    const mrrCtx = document.getElementById('mrrChart');
+    if (mrrCtx) {
+        new Chart(mrrCtx, {
+            type: 'line',
+            data: mrrData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return '€' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '€' + value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Plan Revenue Chart
+    const planCtx = document.getElementById('planRevenueChart');
+    if (planCtx) {
+        new Chart(planCtx, {
+            type: 'doughnut',
+            data: planRevenueData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': €' + context.parsed.toFixed(2);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+
+// Export Functions
+function exportFinancialData(format) {
+    window.location.href = `/api/export_financial_data?format=${format}`;
+}
+
+function generateMonthlyReport() {
+    if (confirm('Generate monthly financial report?')) {
+        fetch('/api/generate_monthly_report', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Report generated successfully! Check your email.');
+            }
+        });
+    }
+}
+
+function sendFinancialSummary() {
+    if (confirm('Send financial summary to your email?')) {
+        fetch('/api/send_financial_summary', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Summary sent successfully!');
+            }
+        });
+    }
+}
+
+// Auto-refresh every 5 minutes
+setInterval(function() {
+    location.reload();
+}, 300000);
+</script>
+{% endblock %}

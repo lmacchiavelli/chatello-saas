@@ -1,0 +1,530 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Licenses - Chatello Admin{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h3>🎫 License Management</h3>
+    <p>Total Licenses: <strong>{{ total_licenses }}</strong></p>
+    
+    {% if licenses %}
+        <table>
+            <thead>
+                <tr>
+                    <th>License Key</th>
+                    <th>Customer</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Usage</th>
+                    <th>Created</th>
+                    <th>Expires</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for license in licenses %}
+                <tr>
+                    <td><code style="font-size: 0.8rem;">{{ license.license_key }}</code></td>
+                    <td>
+                        <strong>{{ license.customer_name }}</strong><br>
+                        <small style="color: #666;">{{ license.customer_email }}</small>
+                    </td>
+                    <td>
+                        <span style="background: #e3f2fd; color: #1565c0; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.8rem;">
+                            {{ license.plan_name }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="background: {% if license.status == 'active' %}#e8f5e8; color: #2e7d32{% elif license.status == 'expired' %}#fff3e0; color: #ef6c00{% else %}#ffebee; color: #c62828{% endif %}; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.8rem;">
+                            {{ license.status.title() }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if license.usage_limit > 0 %}
+                            <div style="font-size: 0.8rem;">
+                                {{ license.usage_count }}/{{ license.usage_limit }}
+                                <div style="background: #eee; border-radius: 10px; height: 4px; margin-top: 2px;">
+                                    <div style="background: #667eea; height: 4px; border-radius: 10px; width: {{ (license.usage_count / license.usage_limit * 100) | round }}%;"></div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <span style="color: #999; font-size: 0.8rem;">Unlimited</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ license.created_at.isoformat()[:10] if license.created_at else 'N/A' }}</td>
+                    <td>
+                        {% if license.expires_at %}
+                            {{ license.expires_at.isoformat()[:10] }}
+                        {% else %}
+                            <span style="color: #4caf50; font-weight: bold;">Never</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-primary" onclick="viewLicense('{{ license._id }}', '{{ license.license_key }}')" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">View</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+                <a href="{{ url_for('licenses', page=page-1) }}">&laquo; Previous</a>
+            {% endif %}
+            
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                    <span class="current">{{ p }}</span>
+                {% else %}
+                    <a href="{{ url_for('licenses', page=p) }}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page < total_pages %}
+                <a href="{{ url_for('licenses', page=page+1) }}">Next &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+    {% else %}
+        <div style="text-align: center; padding: 3rem; color: #666;">
+            <h4>No licenses found</h4>
+            <p>Licenses will appear here once customers purchase plans.</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Manual License Key Input -->
+<div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+    <h3>🔑 Insert License Key Manually</h3>
+    <p style="opacity: 0.9;">Have a license key? Insert it directly to activate or update it in the system</p>
+    <form id="manualLicenseForm" onsubmit="insertManualLicense(event)" style="display: flex; gap: 1rem; align-items: end;">
+        <div style="flex: 1;">
+            <label for="manual_license_key">License Key:</label>
+            <input type="text" 
+                   id="manual_license_key" 
+                   placeholder="e.g., CHA-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" 
+                   pattern="CHA-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}"
+                   required 
+                   style="width: 100%; padding: 0.7rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 6px; background: rgba(255,255,255,0.1); color: white; font-family: monospace; font-size: 1rem;">
+            <small style="opacity: 0.8;">Format: CHA-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX</small>
+        </div>
+        <button type="submit" class="btn" style="background: white; color: #667eea; font-weight: bold; padding: 0.7rem 2rem;">
+            🔍 Verify & Insert
+        </button>
+    </form>
+    <div id="licenseResult" style="margin-top: 1rem; display: none;"></div>
+</div>
+
+<!-- Create License Form -->
+<div class="card">
+    <h3>➕ Create New License</h3>
+    <form onsubmit="createLicense(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end; margin-bottom: 1rem;">
+            <div>
+                <label for="license_customer_id">Customer ID:</label>
+                <input type="text" 
+                       id="license_customer_id" 
+                       placeholder="MongoDB ObjectID (24 chars hex)" 
+                       pattern="[a-fA-F0-9]{24}"
+                       required 
+                       style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.9rem;"
+                       oninput="validateAndLookupCustomer(this.value)">
+                <small style="color: #666;">Get from Customers page → View button</small>
+            </div>
+            <div>
+                <label for="license_plan_id">Plan:</label>
+                <select id="license_plan_id" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">Select Plan</option>
+                    {% for plan in plans %}
+                    <option value="{{ plan.id }}">{{ plan.name }} (€{{ "%.2f"|format(plan.price) }}/month)</option>
+                    {% endfor %}
+                </select>
+                {% if not plans %}
+                <small style="color: #ff5722;">⚠️ No plans found. Initialize plans first.</small>
+                {% endif %}
+            </div>
+            <div>
+                <label for="license_status">Status:</label>
+                <select id="license_status" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="expired">Expired</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" id="createLicenseBtn" {% if not plans %}disabled{% endif %}>
+                {% if plans %}Create License{% else %}⚠️ No Plans{% endif %}
+            </button>
+        </div>
+        
+        <!-- Customer Lookup Result -->
+        <div id="customerLookupResult" style="display: none; padding: 1rem; border-radius: 6px; margin-top: 0.5rem;">
+            <!-- Customer info will appear here -->
+        </div>
+    </form>
+    
+    <!-- Helper: Recent Customers -->
+    <div style="margin-top: 1.5rem; padding: 1rem; background: #f9f9f9; border-radius: 6px;">
+        <h4 style="margin: 0 0 1rem 0; font-size: 1rem; color: #666;">🔍 Recent Customers (for reference)</h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.5rem; font-size: 0.85rem;">
+            {% for customer in customers[:6] %}
+            <div style="padding: 0.5rem; background: white; border-radius: 4px; border: 1px solid #e0e0e0;">
+                <div style="font-weight: bold;">{{ customer.name }}</div>
+                <div style="color: #666; font-size: 0.8rem;">{{ customer.email }}</div>
+                <div style="font-family: monospace; color: #333; font-size: 0.8rem; margin-top: 0.25rem;">
+                    <span onclick="copyToClipboard('{{ customer.id }}', this)" 
+                          style="cursor: pointer; padding: 0.2rem 0.4rem; background: #f0f0f0; border-radius: 3px;">
+                        {{ customer.id }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not customers %}
+            <div style="color: #666; font-style: italic; text-align: center; padding: 1rem;">
+                No customers found. Create customers first.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- License Statistics -->
+<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-top: 2rem;">
+    <div class="card">
+        <h4>📊 License Status</h4>
+        <div style="margin-top: 1rem;">
+            {% set total = licenses|length %}
+            {% if total > 0 %}
+                {% set active = licenses|selectattr("status", "equalto", "active")|list|length %}
+                {% set expired = licenses|selectattr("status", "equalto", "expired")|list|length %}
+                {% set inactive = total - active - expired %}
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="color: #4caf50;">Active:</span>
+                    <strong>{{ active }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="color: #ff9800;">Expired:</span>
+                    <strong>{{ expired }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #666;">Inactive:</span>
+                    <strong>{{ inactive }}</strong>
+                </div>
+            {% else %}
+                <p style="color: #666; font-style: italic;">No data available</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card">
+        <h4>💎 Plan Distribution</h4>
+        <div style="margin-top: 1rem;">
+            {% if licenses %}
+                {% set starter_count = licenses|selectattr("plan_name", "equalto", "Starter")|list|length %}
+                {% set pro_count = licenses|selectattr("plan_name", "equalto", "Pro")|list|length %}
+                {% set agency_count = licenses|selectattr("plan_name", "equalto", "Agency")|list|length %}
+                
+                {% if starter_count > 0 %}
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Starter:</span>
+                    <strong>{{ starter_count }}</strong>
+                </div>
+                {% endif %}
+                
+                {% if pro_count > 0 %}
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Pro:</span>
+                    <strong>{{ pro_count }}</strong>
+                </div>
+                {% endif %}
+                
+                {% if agency_count > 0 %}
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Agency:</span>
+                    <strong>{{ agency_count }}</strong>
+                </div>
+                {% endif %}
+                
+                {% if starter_count == 0 and pro_count == 0 and agency_count == 0 %}
+                <p style="color: #666; font-style: italic;">No plans assigned</p>
+                {% endif %}
+            {% else %}
+                <p style="color: #666; font-style: italic;">No data available</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card">
+        <h4>⏰ Recent Activity</h4>
+        <div style="margin-top: 1rem;">
+            {% if licenses %}
+                {% set recent = licenses|sort(attribute='created_at', reverse=true)|list %}
+                {% set count = 0 %}
+                {% for license in recent %}
+                    {% if count < 3 %}
+                        <div style="border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-bottom: 0.5rem; font-size: 0.8rem;">
+                            <div style="font-weight: bold;">{{ license.customer_name }}</div>
+                            <div style="color: #666;">{{ license.plan_name }} - {{ license.created_at.isoformat()[5:10].replace('-', '/') if license.created_at else 'N/A' }}</div>
+                        </div>
+                        {% set count = count + 1 %}
+                    {% endif %}
+                {% endfor %}
+                {% if count == 0 %}
+                    <p style="color: #666; font-style: italic;">No recent activity</p>
+                {% endif %}
+            {% else %}
+                <p style="color: #666; font-style: italic;">No recent activity</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+#manual_license_key::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+#manual_license_key:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.15);
+}
+</style>
+
+<script>
+function viewLicense(licenseId, licenseKey) {
+    alert('License Details:\n\n' + 
+          'ID: ' + licenseId + '\n' +
+          'Key: ' + licenseKey + '\n\n' +
+          'Full license management will be available in the next version.');
+}
+
+function insertManualLicense(event) {
+    event.preventDefault();
+    
+    const licenseKey = document.getElementById('manual_license_key').value.trim().toUpperCase();
+    const resultDiv = document.getElementById('licenseResult');
+    
+    // Validate format
+    const licensePattern = /^CHA-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}$/;
+    if (!licensePattern.test(licenseKey)) {
+        resultDiv.innerHTML = '<div style="background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 6px; border-left: 4px solid #ff5252;">❌ Invalid license format. Please use: CHA-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX</div>';
+        resultDiv.style.display = 'block';
+        return;
+    }
+    
+    // Show loading
+    resultDiv.innerHTML = '<div style="background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 6px;">⏳ Verifying license key...</div>';
+    resultDiv.style.display = 'block';
+    
+    // Send to backend
+    fetch('/api/insert_license', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            license_key: licenseKey
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.innerHTML = `
+                <div style="background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 6px; border-left: 4px solid #4caf50;">
+                    ✅ <strong>License successfully processed!</strong><br>
+                    <div style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.9;">
+                        ${data.action === 'created' ? '🆕 New license created' : '🔄 Existing license updated'}<br>
+                        Customer: ${data.customer_name || 'N/A'}<br>
+                        Plan: ${data.plan_name || 'N/A'}<br>
+                        Status: ${data.status || 'N/A'}
+                    </div>
+                </div>
+            `;
+            
+            // Clear the input
+            document.getElementById('manual_license_key').value = '';
+            
+            // Refresh page after 3 seconds
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+        } else {
+            resultDiv.innerHTML = `
+                <div style="background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 6px; border-left: 4px solid #ff5252;">
+                    ❌ <strong>Error:</strong> ${data.error || 'Failed to process license'}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = `
+            <div style="background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 6px; border-left: 4px solid #ff5252;">
+                ❌ <strong>Network error:</strong> ${error.message}
+            </div>
+        `;
+    });
+}
+
+// Global variables for customer lookup
+let customerLookupTimeout;
+let validCustomer = false;
+
+function validateAndLookupCustomer(customerId) {
+    const resultDiv = document.getElementById('customerLookupResult');
+    const input = document.getElementById('license_customer_id');
+    const createBtn = document.getElementById('createLicenseBtn');
+    
+    // Clear previous timeout
+    if (customerLookupTimeout) {
+        clearTimeout(customerLookupTimeout);
+    }
+    
+    // Reset validation state
+    validCustomer = false;
+    
+    // Validate ObjectID format (24 hex characters)
+    const objectIdPattern = /^[a-fA-F0-9]{24}$/;
+    
+    if (!customerId || customerId.length === 0) {
+        resultDiv.style.display = 'none';
+        input.style.borderColor = '#ddd';
+        return;
+    }
+    
+    if (!objectIdPattern.test(customerId)) {
+        if (customerId.length > 0) {
+            resultDiv.innerHTML = '<div style="background: #ffebee; color: #c62828; border-left: 4px solid #f44336;">❌ Invalid ObjectID format. Must be 24 hexadecimal characters.</div>';
+            resultDiv.style.display = 'block';
+            input.style.borderColor = '#f44336';
+        }
+        return;
+    }
+    
+    // Valid format - show loading and lookup
+    input.style.borderColor = '#2196f3';
+    resultDiv.innerHTML = '<div style="background: #e3f2fd; color: #1976d2; border-left: 4px solid #2196f3;">⏳ Looking up customer...</div>';
+    resultDiv.style.display = 'block';
+    
+    // Debounced lookup
+    customerLookupTimeout = setTimeout(() => {
+        fetch('/api/get_customer/' + customerId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    validCustomer = true;
+                    input.style.borderColor = '#4caf50';
+                    const licenseCount = data.customer.licenses ? data.customer.licenses.length : 0;
+                    resultDiv.innerHTML = `
+                        <div style="background: #e8f5e8; color: #2e7d32; border-left: 4px solid #4caf50;">
+                            ✅ <strong>Customer Found:</strong> ${data.customer.name}<br>
+                            <small>Email: ${data.customer.email} | Existing Licenses: ${licenseCount}</small>
+                        </div>
+                    `;
+                } else {
+                    validCustomer = false;
+                    input.style.borderColor = '#f44336';
+                    resultDiv.innerHTML = `
+                        <div style="background: #ffebee; color: #c62828; border-left: 4px solid #f44336;">
+                            ❌ <strong>Customer not found.</strong> Check the Customer ID or create the customer first.
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                validCustomer = false;
+                input.style.borderColor = '#f44336';
+                resultDiv.innerHTML = `
+                    <div style="background: #fff3e0; color: #ef6c00; border-left: 4px solid #ff9800;">
+                        ⚠️ <strong>Error looking up customer:</strong> ${error.message}
+                    </div>
+                `;
+            });
+    }, 500); // 500ms debounce
+}
+
+function copyToClipboard(text, element) {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalText = element.innerHTML;
+        element.innerHTML = '✅ Copied!';
+        element.style.background = '#e8f5e8';
+        
+        // Paste into the customer ID field
+        document.getElementById('license_customer_id').value = text;
+        validateAndLookupCustomer(text);
+        
+        setTimeout(() => {
+            element.innerHTML = originalText;
+            element.style.background = '#f0f0f0';
+        }, 2000);
+    });
+}
+
+function createLicense(event) {
+    event.preventDefault();
+    
+    const customerId = document.getElementById('license_customer_id').value;
+    const planId = document.getElementById('license_plan_id').value;
+    const status = document.getElementById('license_status').value;
+    
+    if (!customerId || !planId) {
+        alert('Please fill in Customer ID and select a Plan');
+        return;
+    }
+    
+    if (!validCustomer) {
+        alert('Please wait for customer validation to complete or enter a valid Customer ID');
+        return;
+    }
+    
+    // Disable the form while processing
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    const originalText = submitButton.innerHTML;
+    submitButton.innerHTML = '⏳ Creating...';
+    submitButton.disabled = true;
+    
+    // Send to API
+    fetch('/api/create_license', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            customer_id: customerId,
+            plan_id: planId,
+            status: status
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`✅ License created successfully!\n\nLicense Key: ${data.license_key}\nCustomer: ${data.customer_name}\nPlan: ${data.plan_name}`);
+            
+            // Reset form
+            document.getElementById('license_customer_id').value = '';
+            document.getElementById('license_plan_id').value = '';
+            document.getElementById('license_status').value = 'active';
+            
+            // Reload page to show new license
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            alert('❌ Error creating license:\n' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Network error creating license:\n' + error.message);
+    })
+    .finally(() => {
+        // Re-enable the form
+        submitButton.innerHTML = originalText;
+        submitButton.disabled = false;
+    });
+}
+</script>
+{% endblock %}
