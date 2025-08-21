@@ -158,9 +158,106 @@
     </div>
 </div>
 
+    <!-- Historical Analytics Table with requested columns -->
+    <div class="card" style="margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3>📊 Dati Storici Analytics</h3>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <!-- Period selector -->
+                <select id="daysPeriod" onchange="changePeriod()" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ddd;">
+                    <option value="7" {% if days_to_show == 7 %}selected{% endif %}>Ultimi 7 giorni</option>
+                    <option value="30" {% if days_to_show == 30 %}selected{% endif %}>Ultimi 30 giorni</option>
+                    <option value="60" {% if days_to_show == 60 %}selected{% endif %}>Ultimi 60 giorni</option>
+                    <option value="90" {% if days_to_show == 90 %}selected{% endif %}>Ultimi 90 giorni</option>
+                </select>
+                
+                <!-- Export buttons -->
+                <button onclick="exportHistoricalData('csv')" style="background: #27ae60; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+                    📥 CSV
+                </button>
+                <button onclick="exportHistoricalData('excel')" style="background: #2980b9; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+                    📊 Excel
+                </button>
+                
+                <!-- Save today's data button -->
+                <button onclick="saveTodayAnalytics()" style="background: #8e44ad; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">
+                    💾 Salva Oggi
+                </button>
+            </div>
+        </div>
+        
+        {% if historical_data %}
+        <div class="table-container" style="max-height: 500px; overflow-y: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 10;">
+                    <tr>
+                        <th style="padding: 1rem; text-align: left; border: 1px solid #dee2e6; background: #667eea; color: white;">A) Data</th>
+                        <th style="padding: 1rem; text-align: center; border: 1px solid #dee2e6; background: #667eea; color: white;">B) Clienti Totali</th>
+                        <th style="padding: 1rem; text-align: center; border: 1px solid #dee2e6; background: #667eea; color: white;">C) Clienti Paganti</th>
+                        <th style="padding: 1rem; text-align: right; border: 1px solid #dee2e6; background: #667eea; color: white;">D) MRR</th>
+                        <th style="padding: 1rem; text-align: left; border: 1px solid #dee2e6; background: #667eea; color: white;">E) Note</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in historical_data %}
+                    <tr style="{% if loop.index0 % 2 == 0 %}background: #f8f9fa;{% endif %}">
+                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; font-weight: bold;">{{ record.date }}</td>
+                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center;">
+                            <span style="background: #e8f4fd; color: #2980b9; padding: 0.25rem 0.5rem; border-radius: 12px; font-weight: bold;">
+                                {{ record.total_customers }}
+                            </span>
+                        </td>
+                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center;">
+                            <span style="background: #d5f4e6; color: #27ae60; padding: 0.25rem 0.5rem; border-radius: 12px; font-weight: bold;">
+                                {{ record.paying_customers }}
+                            </span>
+                        </td>
+                        <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: right; font-weight: bold; color: #8e44ad;">
+                            {{ record.mrr }}
+                        </td>
+                        <td style="padding: 0.75rem; border: 1px solid #dee2e6;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="notes-{{ record.date }}" style="flex: 1; min-height: 20px;">{{ record.notes or 'Nessuna nota' }}</span>
+                                <button onclick="editNotes('{{ record.date }}', '{{ record.notes }}')" 
+                                        style="background: #f39c12; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                                    ✏️
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Summary row -->
+        <div style="margin-top: 1rem; padding: 1rem; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 8px;">
+            <strong>📈 Riepilogo periodo ({{ days_to_show }} giorni):</strong>
+            {% set total_records = historical_data|length %}
+            {% set latest_record = historical_data[0] if historical_data else {} %}
+            {% set oldest_record = historical_data[-1] if historical_data else {} %}
+            <div style="margin-top: 0.5rem;">
+                Ultimo: {{ latest_record.date or 'N/A' }} | 
+                MRR: {{ latest_record.mrr or '€0.00' }} | 
+                Clienti Paganti: {{ latest_record.paying_customers or 0 }} | 
+                Totale record: {{ total_records }}
+            </div>
+        </div>
+        
+        {% else %}
+        <div style="text-align: center; padding: 2rem; color: #7f8c8d;">
+            <h4>📅 Nessun dato storico disponibile</h4>
+            <p>Clicca su "💾 Salva Oggi" per iniziare a tracciare i dati analytics storici.</p>
+            <button onclick="saveTodayAnalytics()" style="background: #8e44ad; color: white; border: none; padding: 1rem 2rem; border-radius: 8px; cursor: pointer; font-size: 1.1rem; margin-top: 1rem;">
+                🚀 Inizia Tracking Storico
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
     <div style="background: #d5f4e6; border: 1px solid #27ae60; border-radius: 8px; padding: 1rem; margin-top: 2rem; color: #155724;">
-        <strong>✅ Analytics Dashboard is working correctly!</strong>
-        <p style="margin-top: 0.5rem; margin-bottom: 0;">All financial metrics are loading successfully without JSON serialization errors.</p>
+        <strong>✅ Analytics Dashboard with Historical Data!</strong>
+        <p style="margin-top: 0.5rem; margin-bottom: 0;">Complete analytics with columns A-E: Date, Total Customers, Paying Customers, MRR, Notes.</p>
     </div>
 </div><!-- End analytics-wrapper -->
 
@@ -205,5 +302,82 @@
     box-sizing: border-box;
 }
 </style>
+
+<script>
+// JavaScript functions for historical analytics functionality
+
+function changePeriod() {
+    const days = document.getElementById('daysPeriod').value;
+    window.location.href = `/analytics?days=${days}`;
+}
+
+function exportHistoricalData(format) {
+    const days = document.getElementById('daysPeriod').value;
+    window.location.href = `/api/export_historical_data?format=${format}&days=${days}`;
+}
+
+function saveTodayAnalytics() {
+    const notes = prompt('Aggiungi note per oggi (opzionale):') || '';
+    
+    fetch('/api/save_daily_analytics', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            notes: notes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Dati analytics salvati con successo!');
+            window.location.reload();
+        } else {
+            alert('❌ Errore nel salvare i dati: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Errore di connessione');
+    });
+}
+
+function editNotes(date, currentNotes) {
+    const newNotes = prompt(`Modifica note per ${date}:`, currentNotes || '');
+    
+    if (newNotes !== null) {  // User didn't cancel
+        fetch('/api/update_historical_notes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                date: date,
+                notes: newNotes
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the notes display
+                document.getElementById(`notes-${date}`).textContent = newNotes || 'Nessuna nota';
+                alert('✅ Note aggiornate con successo!');
+            } else {
+                alert('❌ Errore nell\'aggiornare le note: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Errore di connessione');
+        });
+    }
+}
+
+// Auto-refresh every 5 minutes
+setTimeout(() => {
+    window.location.reload();
+}, 5 * 60 * 1000);
+</script>
 
 {% endblock %}

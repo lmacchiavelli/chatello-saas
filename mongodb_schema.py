@@ -110,6 +110,41 @@ COLLECTIONS_SCHEMA = {
         'details': 'dict',
         'ip_address': 'str',
         'created_at': 'datetime'
+    },
+    
+    # Historical Analytics collection (new - for daily/monthly tracking)
+    'historical_analytics': {
+        '_id': 'ObjectId',
+        'date': 'datetime',        # Date of the record (start of day)
+        'period_type': 'str',      # 'daily', 'monthly'
+        'total_customers': 'int',  # Total customers count
+        'paying_customers': 'int', # Active paying customers
+        'mrr': 'float',           # Monthly Recurring Revenue for that period
+        'arr': 'float',           # Annual Recurring Revenue (MRR * 12)
+        'new_customers': 'int',   # New customers added this period
+        'churned_customers': 'int', # Customers lost this period
+        'notes': 'str',           # Admin notes for this period
+        'revenue_by_plan': 'dict', # Revenue breakdown by plan
+        'auto_events': 'list',    # Automatic events for this day
+        'created_at': 'datetime',
+        'updated_at': 'datetime'
+    },
+    
+    # Business Events collection (new - automatic event tracking)
+    'business_events': {
+        '_id': 'ObjectId',
+        'event_type': 'str',      # 'new_customer', 'license_created', 'license_cancelled', 'payment_completed', 'milestone'
+        'event_date': 'datetime', # When the event occurred
+        'customer_id': 'ObjectId', # Optional - related customer
+        'license_id': 'ObjectId',  # Optional - related license
+        'plan_name': 'str',       # Optional - plan involved
+        'amount': 'float',        # Optional - money amount
+        'currency': 'str',        # Optional - EUR, USD
+        'description': 'str',     # Human readable description
+        'auto_generated': 'bool', # True if automatically generated
+        'metadata': 'dict',       # Additional event data
+        'processed': 'bool',      # If included in daily analytics
+        'created_at': 'datetime'
     }
 }
 
@@ -159,6 +194,21 @@ INDEXES = {
         IndexModel([('customer_id', ASCENDING)]),
         IndexModel([('action', ASCENDING)]),
         IndexModel([('created_at', DESCENDING)])
+    ],
+    
+    'historical_analytics': [
+        IndexModel([('date', DESCENDING)]),
+        IndexModel([('period_type', ASCENDING)]),
+        IndexModel([('date', ASCENDING), ('period_type', ASCENDING)], unique=True)  # Prevent duplicate entries
+    ],
+    
+    'business_events': [
+        IndexModel([('event_date', DESCENDING)]),
+        IndexModel([('event_type', ASCENDING)]),
+        IndexModel([('customer_id', ASCENDING)]),
+        IndexModel([('license_id', ASCENDING)]),
+        IndexModel([('processed', ASCENDING)]),
+        IndexModel([('auto_generated', ASCENDING)])
     ]
 }
 
@@ -507,6 +557,538 @@ def get_usage_stats(db, license_id, month=None, year=None):
             'budget': round((current_cost / monthly_budget * 100), 2) if monthly_budget > 0 else 0
         }
     }
+
+
+def save_daily_analytics(db, target_date=None, notes=""):
+    """
+    Save daily analytics snapshot to historical_analytics collection
+    """
+    from datetime import timezone
+    
+    if target_date is None:
+        target_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Calculate analytics for the specified date
+    total_customers = db.customers.count_documents({})
+    
+    # Get active licenses (paying customers)
+    active_licenses_pipeline = [
+        {
+            '$match': {
+                'status': 'active',
+                '$or': [
+                    {'expires_at': None},
+                    {'expires_at': {'$gt': target_date}}
+                ]
+            }
+        },
+        {
+            '$lookup': {
+                'from': 'plans',
+                'localField': 'plan_id',
+                'foreignField': '_id',
+                'as': 'plan'
+            }
+        },
+        {'$unwind': '$plan'}
+    ]
+    
+    active_licenses = list(db.licenses.aggregate(active_licenses_pipeline))
+    paying_customers = len(active_licenses)
+    
+    # Calculate MRR and revenue by plan
+    mrr = 0
+    revenue_by_plan = {}
+    
+    for license in active_licenses:
+        plan_name = license['plan']['name'].lower()
+        plan_price = license['plan'].get('price', 0)
+        
+        if plan_name not in revenue_by_plan:
+            revenue_by_plan[plan_name] = {'revenue': 0, 'count': 0}
+        
+        revenue_by_plan[plan_name]['count'] += 1
+        
+        # Skip one-time/lifetime plans from MRR
+        if not license['plan'].get('is_lifetime', False) and plan_name != 'founders':
+            mrr += plan_price
+            revenue_by_plan[plan_name]['revenue'] += plan_price
+        else:
+            revenue_by_plan[plan_name]['revenue'] += plan_price  # Track total revenue
+    
+    arr = mrr * 12
+    
+    # Calculate new customers for this day (simplified - would need better logic in production)
+    day_start = target_date
+    day_end = target_date.replace(hour=23, minute=59, second=59)
+    
+    new_customers = db.customers.count_documents({
+        'created_at': {'$gte': day_start, '$lte': day_end}
+    })
+    
+    # Calculate churned customers (simplified)
+    churned_customers = db.licenses.count_documents({
+        'status': 'cancelled',
+        'updated_at': {'$gte': day_start, '$lte': day_end}
+    })
+    
+    # Create historical record
+    historical_record = {
+        'date': target_date,
+        'period_type': 'daily',
+        'total_customers': total_customers,
+        'paying_customers': paying_customers,
+        'mrr': round(mrr, 2),
+        'arr': round(arr, 2),
+        'new_customers': new_customers,
+        'churned_customers': churned_customers,
+        'notes': notes,
+        'revenue_by_plan': revenue_by_plan,
+        'created_at': datetime.now(timezone.utc),
+        'updated_at': datetime.now(timezone.utc)
+    }
+    
+    # Use upsert to prevent duplicates
+    result = db.historical_analytics.replace_one(
+        {'date': target_date, 'period_type': 'daily'},
+        historical_record,
+        upsert=True
+    )
+    
+    return {
+        'success': True,
+        'record_id': str(result.upserted_id) if result.upserted_id else 'updated',
+        'data': historical_record
+    }
+
+
+def get_historical_analytics(db, days=30, period_type='daily'):
+    """
+    Retrieve historical analytics data for the specified period
+    """
+    from datetime import timezone
+    
+    # Calculate date range
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    
+    # Query historical data
+    historical_data = list(db.historical_analytics.find({
+        'period_type': period_type,
+        'date': {'$gte': start_date, '$lte': end_date}
+    }).sort('date', -1))  # Most recent first
+    
+    # Format data for table display
+    formatted_data = []
+    for record in historical_data:
+        formatted_data.append({
+            'date': record['date'].strftime('%Y-%m-%d'),
+            'total_customers': record['total_customers'],
+            'paying_customers': record['paying_customers'],
+            'mrr': f"€{record['mrr']:.2f}",
+            'arr': f"€{record['arr']:.2f}",
+            'new_customers': record.get('new_customers', 0),
+            'churned_customers': record.get('churned_customers', 0),
+            'notes': record.get('notes', ''),
+            'revenue_by_plan': record.get('revenue_by_plan', {})
+        })
+    
+    return formatted_data
+
+
+def update_historical_notes(db, target_date, notes):
+    """
+    Update notes for a specific historical record
+    """
+    from datetime import timezone
+    
+    # Parse date if it's a string
+    if isinstance(target_date, str):
+        target_date = datetime.strptime(target_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+    
+    result = db.historical_analytics.update_one(
+        {'date': target_date, 'period_type': 'daily'},
+        {
+            '$set': {
+                'notes': notes,
+                'updated_at': datetime.now(timezone.utc)
+            }
+        }
+    )
+    
+    return result.modified_count > 0
+
+
+def create_business_event(db, event_type, description, customer_id=None, license_id=None, plan_name=None, amount=None, currency='EUR', metadata=None):
+    """
+    Create a new business event that will be automatically included in daily analytics
+    """
+    from datetime import timezone
+    
+    # Validate event type
+    valid_events = [
+        'new_customer',           # Nuovo cliente registrato
+        'license_created',        # Nuova licenza creata
+        'license_activated',      # Licenza attivata
+        'license_cancelled',      # Licenza cancellata
+        'payment_completed',      # Pagamento completato
+        'payment_failed',         # Pagamento fallito
+        'plan_upgraded',          # Upgrade piano
+        'plan_downgraded',        # Downgrade piano
+        'milestone_reached',      # Milestone raggiunto (es. 100 clienti)
+        'marketing_campaign',     # Inizio campagna marketing
+        'feature_released',       # Rilascio nuova feature
+        'partnership',           # Nuova partnership
+        'media_mention',         # Menzione sui media
+        'support_ticket',        # Ticket di supporto importante
+        'server_issue',          # Problema server
+        'maintenance',           # Manutenzione programmata
+    ]
+    
+    if event_type not in valid_events:
+        raise ValueError(f"Invalid event_type. Must be one of: {valid_events}")
+    
+    # Create event document
+    event = {
+        'event_type': event_type,
+        'event_date': datetime.now(timezone.utc),
+        'customer_id': customer_id,
+        'license_id': license_id,
+        'plan_name': plan_name,
+        'amount': amount,
+        'currency': currency,
+        'description': description,
+        'auto_generated': True,
+        'metadata': metadata or {},
+        'processed': False,
+        'created_at': datetime.now(timezone.utc)
+    }
+    
+    # Insert event
+    result = db.business_events.insert_one(event)
+    
+    return {
+        'success': True,
+        'event_id': str(result.inserted_id),
+        'event': event
+    }
+
+
+def get_daily_events(db, target_date=None):
+    """
+    Get all business events for a specific day
+    """
+    from datetime import timezone
+    
+    if target_date is None:
+        target_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Get events for the day
+    day_start = target_date
+    day_end = target_date.replace(hour=23, minute=59, second=59)
+    
+    events = list(db.business_events.find({
+        'event_date': {'$gte': day_start, '$lte': day_end}
+    }).sort('event_date', 1))
+    
+    return events
+
+
+def generate_daily_notes(db, target_date=None):
+    """
+    Generate automatic daily notes based on business events
+    """
+    events = get_daily_events(db, target_date)
+    
+    if not events:
+        return ""
+    
+    # Group events by type
+    event_groups = {}
+    for event in events:
+        event_type = event['event_type']
+        if event_type not in event_groups:
+            event_groups[event_type] = []
+        event_groups[event_type].append(event)
+    
+    # Generate notes based on events
+    notes_parts = []
+    
+    # Priority events first (sales, customers, etc.)
+    priority_events = ['new_customer', 'license_created', 'payment_completed', 'milestone_reached']
+    
+    for event_type in priority_events:
+        if event_type in event_groups:
+            events_of_type = event_groups[event_type]
+            
+            if event_type == 'new_customer':
+                count = len(events_of_type)
+                if count == 1:
+                    notes_parts.append(f"🎉 Nuovo cliente: {events_of_type[0]['description']}")
+                else:
+                    notes_parts.append(f"🎉 {count} nuovi clienti registrati")
+            
+            elif event_type == 'license_created':
+                count = len(events_of_type)
+                if count == 1:
+                    plan = events_of_type[0].get('plan_name', 'Unknown')
+                    notes_parts.append(f"🎫 Nuova licenza {plan.title()}: {events_of_type[0]['description']}")
+                else:
+                    notes_parts.append(f"🎫 {count} nuove licenze create")
+            
+            elif event_type == 'payment_completed':
+                total_amount = sum(e.get('amount', 0) for e in events_of_type)
+                count = len(events_of_type)
+                if count == 1:
+                    notes_parts.append(f"💰 Pagamento ricevuto: €{events_of_type[0].get('amount', 0)}")
+                else:
+                    notes_parts.append(f"💰 {count} pagamenti completati (€{total_amount:.2f})")
+            
+            elif event_type == 'milestone_reached':
+                for event in events_of_type:
+                    notes_parts.append(f"🏆 {event['description']}")
+    
+    # Other business events
+    other_events = ['plan_upgraded', 'plan_downgraded', 'feature_released', 'marketing_campaign', 'partnership']
+    
+    for event_type in other_events:
+        if event_type in event_groups:
+            events_of_type = event_groups[event_type]
+            
+            if event_type == 'plan_upgraded':
+                count = len(events_of_type)
+                notes_parts.append(f"⬆️ {count} upgrade piano")
+            
+            elif event_type == 'plan_downgraded':
+                count = len(events_of_type)
+                notes_parts.append(f"⬇️ {count} downgrade piano")
+            
+            elif event_type == 'feature_released':
+                for event in events_of_type:
+                    notes_parts.append(f"🚀 {event['description']}")
+            
+            elif event_type == 'marketing_campaign':
+                for event in events_of_type:
+                    notes_parts.append(f"📢 {event['description']}")
+            
+            elif event_type == 'partnership':
+                for event in events_of_type:
+                    notes_parts.append(f"🤝 {event['description']}")
+    
+    # Technical events
+    tech_events = ['server_issue', 'maintenance']
+    
+    for event_type in tech_events:
+        if event_type in event_groups:
+            events_of_type = event_groups[event_type]
+            
+            if event_type == 'server_issue':
+                notes_parts.append(f"⚠️ Problemi tecnici risolti")
+            
+            elif event_type == 'maintenance':
+                notes_parts.append(f"🔧 Manutenzione programmata")
+    
+    # Negative events
+    negative_events = ['license_cancelled', 'payment_failed']
+    
+    for event_type in negative_events:
+        if event_type in event_groups:
+            events_of_type = event_groups[event_type]
+            count = len(events_of_type)
+            
+            if event_type == 'license_cancelled':
+                notes_parts.append(f"😞 {count} licenze cancellate")
+            
+            elif event_type == 'payment_failed':
+                notes_parts.append(f"❌ {count} pagamenti falliti")
+    
+    # Join all notes with separator
+    return " • ".join(notes_parts)
+
+
+def save_daily_analytics_with_events(db, target_date=None, additional_notes=""):
+    """
+    Enhanced version of save_daily_analytics that includes automatic events
+    """
+    from datetime import timezone
+    
+    if target_date is None:
+        target_date = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Get all events for this day
+    events = get_daily_events(db, target_date)
+    
+    # Generate automatic notes
+    auto_notes = generate_daily_notes(db, target_date)
+    
+    # Combine auto notes with additional notes
+    combined_notes = []
+    if auto_notes:
+        combined_notes.append(auto_notes)
+    if additional_notes:
+        combined_notes.append(additional_notes)
+    
+    final_notes = " | ".join(combined_notes)
+    
+    # Calculate analytics for the specified date
+    total_customers = db.customers.count_documents({})
+    
+    # Get active licenses (paying customers)
+    active_licenses_pipeline = [
+        {
+            '$match': {
+                'status': 'active',
+                '$or': [
+                    {'expires_at': None},
+                    {'expires_at': {'$gt': target_date}}
+                ]
+            }
+        },
+        {
+            '$lookup': {
+                'from': 'plans',
+                'localField': 'plan_id',
+                'foreignField': '_id',
+                'as': 'plan'
+            }
+        },
+        {'$unwind': '$plan'}
+    ]
+    
+    active_licenses = list(db.licenses.aggregate(active_licenses_pipeline))
+    paying_customers = len(active_licenses)
+    
+    # Calculate MRR and revenue by plan
+    mrr = 0
+    revenue_by_plan = {}
+    
+    for license in active_licenses:
+        plan_name = license['plan']['name'].lower()
+        plan_price = license['plan'].get('price', 0)
+        
+        if plan_name not in revenue_by_plan:
+            revenue_by_plan[plan_name] = {'revenue': 0, 'count': 0}
+        
+        revenue_by_plan[plan_name]['count'] += 1
+        
+        # Skip one-time/lifetime plans from MRR
+        if not license['plan'].get('is_lifetime', False) and plan_name != 'founders':
+            mrr += plan_price
+            revenue_by_plan[plan_name]['revenue'] += plan_price
+        else:
+            revenue_by_plan[plan_name]['revenue'] += plan_price  # Track total revenue
+    
+    arr = mrr * 12
+    
+    # Calculate new customers for this day
+    day_start = target_date
+    day_end = target_date.replace(hour=23, minute=59, second=59)
+    
+    new_customers = db.customers.count_documents({
+        'created_at': {'$gte': day_start, '$lte': day_end}
+    })
+    
+    # Calculate churned customers
+    churned_customers = db.licenses.count_documents({
+        'status': 'cancelled',
+        'updated_at': {'$gte': day_start, '$lte': day_end}
+    })
+    
+    # Format events for storage
+    auto_events = []
+    for event in events:
+        auto_events.append({
+            'type': event['event_type'],
+            'description': event['description'],
+            'time': event['event_date'].strftime('%H:%M'),
+            'customer_id': str(event.get('customer_id')) if event.get('customer_id') else None,
+            'amount': event.get('amount')
+        })
+    
+    # Create historical record
+    historical_record = {
+        'date': target_date,
+        'period_type': 'daily',
+        'total_customers': total_customers,
+        'paying_customers': paying_customers,
+        'mrr': round(mrr, 2),
+        'arr': round(arr, 2),
+        'new_customers': new_customers,
+        'churned_customers': churned_customers,
+        'notes': final_notes,
+        'revenue_by_plan': revenue_by_plan,
+        'auto_events': auto_events,
+        'created_at': datetime.now(timezone.utc),
+        'updated_at': datetime.now(timezone.utc)
+    }
+    
+    # Use upsert to prevent duplicates
+    result = db.historical_analytics.replace_one(
+        {'date': target_date, 'period_type': 'daily'},
+        historical_record,
+        upsert=True
+    )
+    
+    # Mark events as processed
+    event_ids = [event['_id'] for event in events]
+    if event_ids:
+        db.business_events.update_many(
+            {'_id': {'$in': event_ids}},
+            {'$set': {'processed': True}}
+        )
+    
+    return {
+        'success': True,
+        'record_id': str(result.upserted_id) if result.upserted_id else 'updated',
+        'data': historical_record,
+        'events_processed': len(events),
+        'auto_notes': auto_notes
+    }
+
+
+def check_and_create_milestones(db):
+    """
+    Check if any milestones have been reached and create events for them
+    """
+    from datetime import timezone
+    
+    # Get current stats
+    total_customers = db.customers.count_documents({})
+    active_licenses = db.licenses.count_documents({'status': 'active'})
+    
+    # Define milestones
+    customer_milestones = [10, 25, 50, 100, 250, 500, 1000]
+    license_milestones = [5, 10, 25, 50, 100, 250, 500, 1000]
+    
+    # Check if we've crossed any customer milestones today
+    yesterday_customers = total_customers - db.customers.count_documents({
+        'created_at': {'$gte': datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)}
+    })
+    
+    for milestone in customer_milestones:
+        if yesterday_customers < milestone <= total_customers:
+            # We've crossed this milestone!
+            create_business_event(
+                db,
+                'milestone_reached',
+                f"🎉 Raggiunti {milestone} clienti totali!",
+                metadata={'milestone_type': 'customers', 'milestone_value': milestone}
+            )
+    
+    # Check license milestones
+    yesterday_licenses = active_licenses - db.licenses.count_documents({
+        'status': 'active',
+        'created_at': {'$gte': datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)}
+    })
+    
+    for milestone in license_milestones:
+        if yesterday_licenses < milestone <= active_licenses:
+            create_business_event(
+                db,
+                'milestone_reached',
+                f"🎫 Raggiunte {milestone} licenze attive!",
+                metadata={'milestone_type': 'licenses', 'milestone_value': milestone}
+            )
 
 
 # Example connection and initialization

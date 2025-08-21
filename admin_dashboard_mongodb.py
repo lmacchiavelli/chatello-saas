@@ -22,7 +22,16 @@ import secrets
 import re
 
 # Import MongoDB schema utilities
-from mongodb_schema import generate_license_key, init_mongodb_collections
+from mongodb_schema import (
+    generate_license_key, 
+    init_mongodb_collections,
+    save_daily_analytics,
+    get_historical_analytics,
+    update_historical_notes,
+    create_business_event,
+    save_daily_analytics_with_events,
+    check_and_create_milestones
+)
 
 # Load environment variables
 load_dotenv()
@@ -343,6 +352,21 @@ def create_customer():
         
         result = mongo_db.customers.insert_one(customer)
         
+        # Create business event for new customer
+        try:
+            create_business_event(
+                mongo_db,
+                'new_customer',
+                f"Nuovo cliente registrato: {customer['name']} ({customer['email']})",
+                customer_id=result.inserted_id
+            )
+            
+            # Check if we've hit any milestones
+            check_and_create_milestones(mongo_db)
+            
+        except Exception as e:
+            app.logger.warning(f"Failed to create business event for new customer: {e}")
+        
         return jsonify({
             'success': True,
             'customer_id': str(result.inserted_id),
@@ -455,6 +479,38 @@ def create_license():
             license_doc['expires_at'] = datetime.fromisoformat(data['expires_at'])
         
         result = mongo_db.licenses.insert_one(license_doc)
+        
+        # Create business event for new license
+        try:
+            amount = plan.get('price', 0)
+            create_business_event(
+                mongo_db,
+                'license_created',
+                f"Nuova licenza {plan.get('name', 'Unknown').title()} per {customer.get('name', 'Unknown')}",
+                customer_id=customer_id,
+                license_id=result.inserted_id,
+                plan_name=plan.get('name'),
+                amount=amount,
+                metadata={'license_key': license_key}
+            )
+            
+            # If it's a paid plan, also create payment event
+            if amount > 0:
+                create_business_event(
+                    mongo_db,
+                    'payment_completed',
+                    f"Pagamento ricevuto: €{amount} da {customer.get('name', 'Unknown')}",
+                    customer_id=customer_id,
+                    license_id=result.inserted_id,
+                    plan_name=plan.get('name'),
+                    amount=amount
+                )
+            
+            # Check milestones
+            check_and_create_milestones(mongo_db)
+            
+        except Exception as e:
+            app.logger.warning(f"Failed to create business event for new license: {e}")
         
         return jsonify({
             'success': True,
@@ -590,6 +646,36 @@ def insert_license():
             }
             
             result = mongo_db.licenses.insert_one(new_license)
+            
+            # Create business event for manually inserted license
+            try:
+                amount = default_plan.get('price', 0)
+                create_business_event(
+                    mongo_db,
+                    'license_created',
+                    f"Licenza {default_plan['name'].title()} inserita manualmente: {license_key}",
+                    customer_id=default_customer['_id'],
+                    license_id=result.inserted_id,
+                    plan_name=default_plan['name'],
+                    amount=amount,
+                    metadata={'license_key': license_key, 'source': 'manual_insert'}
+                )
+                
+                # For Founders Deal, create special event
+                if default_plan['name'] == 'founders':
+                    remaining_after = founders_plan.get('lifetime_limit', 500) - founders_licenses_count - 1
+                    create_business_event(
+                        mongo_db,
+                        'milestone_reached',
+                        f"🚀 Founders Deal venduto! Solo {remaining_after} rimasti",
+                        metadata={'founders_remaining': remaining_after, 'license_key': license_key}
+                    )
+                
+                # Check milestones
+                check_and_create_milestones(mongo_db)
+                
+            except Exception as e:
+                app.logger.warning(f"Failed to create business event for manual license: {e}")
             
             # Prepare response message based on assigned plan
             plan_name = default_plan['name']
@@ -814,9 +900,20 @@ def analytics():
                     'is_lifetime': plan.get('is_lifetime', False)
                 })
         
+        # Get historical analytics data for the table
+        days_to_show = int(request.args.get('days', 30))
+        historical_data = get_historical_analytics(mongo_db, days=days_to_show)
+        
+        # If no historical data exists, create today's snapshot
+        if not historical_data:
+            today_snapshot = save_daily_analytics(mongo_db, notes="Initial data snapshot")
+            historical_data = get_historical_analytics(mongo_db, days=days_to_show)
+        
         return render_template('admin/analytics_simple.html', 
                              metrics=metrics,
-                             recent_transactions=recent_transactions)
+                             recent_transactions=recent_transactions,
+                             historical_data=historical_data,
+                             days_to_show=days_to_show)
         
     except Exception as e:
         app.logger.error(f"Analytics page error: {e}")
@@ -1529,6 +1626,289 @@ def test_endpoint():
             'success': False,
             'error': f'Test failed: {str(e)}'
         })
+
+@app.route('/api/save_daily_analytics', methods=['POST'])
+@login_required
+def api_save_daily_analytics():
+    """Save daily analytics snapshot via API"""
+    try:
+        data = request.json
+        target_date_str = data.get('date')
+        notes = data.get('notes', '')
+        
+        # Parse date if provided
+        target_date = None
+        if target_date_str:
+            target_date = datetime.strptime(target_date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        
+        # Save analytics with automatic events
+        result = save_daily_analytics_with_events(mongo_db, target_date=target_date, additional_notes=notes)
+        
+        # Log the action
+        if mongo_db is not None:
+            mongo_db.activity_logs.insert_one({
+                'action': 'daily_analytics_saved',
+                'admin_user': session.get('username', 'admin'),
+                'timestamp': datetime.now(timezone.utc),
+                'ip_address': request.remote_addr,
+                'details': {
+                    'date': target_date_str or 'today',
+                    'notes': notes
+                }
+            })
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        app.logger.error(f"Save daily analytics error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/update_historical_notes', methods=['POST'])
+@login_required
+def api_update_historical_notes():
+    """Update notes for historical record via API"""
+    try:
+        data = request.json
+        target_date = data.get('date')
+        notes = data.get('notes', '')
+        
+        if not target_date:
+            return jsonify({'success': False, 'error': 'Date required'}), 400
+        
+        # Update notes
+        success = update_historical_notes(mongo_db, target_date, notes)
+        
+        if success:
+            # Log the action
+            if mongo_db is not None:
+                mongo_db.activity_logs.insert_one({
+                    'action': 'historical_notes_updated',
+                    'admin_user': session.get('username', 'admin'),
+                    'timestamp': datetime.now(timezone.utc),
+                    'ip_address': request.remote_addr,
+                    'details': {
+                        'date': target_date,
+                        'notes': notes
+                    }
+                })
+            
+            return jsonify({
+                'success': True,
+                'message': f'Notes updated for {target_date}'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Record not found or no changes made'
+            }), 404
+            
+    except Exception as e:
+        app.logger.error(f"Update historical notes error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/export_historical_data')
+@login_required
+def export_historical_data():
+    """Export historical analytics data to CSV or Excel"""
+    try:
+        export_format = request.args.get('format', 'csv').lower()
+        days = int(request.args.get('days', 30))
+        
+        # Get historical data
+        historical_data = get_historical_analytics(mongo_db, days=days)
+        
+        if export_format == 'csv':
+            import csv
+            import io
+            
+            output = io.StringIO()
+            if historical_data:
+                # Define the exact column headers you requested
+                fieldnames = ['Date', 'Total Customers', 'Paying Customers', 'MRR', 'Notes']
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for record in historical_data:
+                    writer.writerow({
+                        'Date': record['date'],
+                        'Total Customers': record['total_customers'],
+                        'Paying Customers': record['paying_customers'],
+                        'MRR': record['mrr'],
+                        'Notes': record['notes']
+                    })
+            
+            response = app.response_class(
+                output.getvalue(),
+                mimetype='text/csv',
+                headers={'Content-Disposition': f'attachment; filename=chatello_historical_analytics_{datetime.now().strftime("%Y%m%d")}.csv'}
+            )
+            return response
+        
+        else:  # Excel format
+            try:
+                import pandas as pd
+                
+                # Format data for Excel export
+                excel_data = []
+                for record in historical_data:
+                    excel_data.append({
+                        'Date': record['date'],
+                        'Total Customers': record['total_customers'],
+                        'Paying Customers': record['paying_customers'], 
+                        'MRR': record['mrr'],
+                        'Notes': record['notes']
+                    })
+                
+                df = pd.DataFrame(excel_data)
+                output = io.BytesIO()
+                df.to_excel(output, index=False, engine='openpyxl')
+                output.seek(0)
+                
+                response = app.response_class(
+                    output.getvalue(),
+                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition': f'attachment; filename=chatello_historical_analytics_{datetime.now().strftime("%Y%m%d")}.xlsx'}
+                )
+                return response
+            except ImportError:
+                flash('Excel export requires pandas and openpyxl. Using CSV export instead.', 'info')
+                return redirect(url_for('export_historical_data', format='csv', days=days))
+    
+    except Exception as e:
+        app.logger.error(f"Export historical data error: {e}")
+        flash(f'Export failed: {e}', 'error')
+        return redirect(url_for('analytics'))
+
+@app.route('/api/create_business_event', methods=['POST'])
+@login_required
+def api_create_business_event():
+    """Create a business event manually via API"""
+    try:
+        data = request.json
+        
+        # Validate required fields
+        event_type = data.get('event_type')
+        description = data.get('description', '')
+        
+        if not event_type or not description:
+            return jsonify({'success': False, 'error': 'event_type and description are required'}), 400
+        
+        # Optional fields
+        customer_id = data.get('customer_id')
+        license_id = data.get('license_id')
+        plan_name = data.get('plan_name')
+        amount = data.get('amount')
+        currency = data.get('currency', 'EUR')
+        metadata = data.get('metadata', {})
+        
+        # Convert string IDs to ObjectId if provided
+        if customer_id:
+            try:
+                customer_id = ObjectId(customer_id)
+            except InvalidId:
+                return jsonify({'success': False, 'error': 'Invalid customer_id format'}), 400
+        
+        if license_id:
+            try:
+                license_id = ObjectId(license_id)
+            except InvalidId:
+                return jsonify({'success': False, 'error': 'Invalid license_id format'}), 400
+        
+        # Create the event
+        result = create_business_event(
+            mongo_db,
+            event_type=event_type,
+            description=description,
+            customer_id=customer_id,
+            license_id=license_id,
+            plan_name=plan_name,
+            amount=amount,
+            currency=currency,
+            metadata=metadata
+        )
+        
+        if result['success']:
+            # Log the manual event creation
+            mongo_db.activity_logs.insert_one({
+                'action': 'business_event_created',
+                'admin_user': session.get('username', 'admin'),
+                'timestamp': datetime.now(timezone.utc),
+                'ip_address': request.remote_addr,
+                'details': {
+                    'event_type': event_type,
+                    'description': description,
+                    'event_id': result['event_id']
+                }
+            })
+            
+            return jsonify({
+                'success': True,
+                'event_id': result['event_id'],
+                'message': f'Business event "{event_type}" created successfully'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to create business event'}), 500
+            
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Create business event error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/get_recent_events')
+@login_required
+def get_recent_events():
+    """Get recent business events"""
+    try:
+        days = int(request.args.get('days', 7))
+        limit = int(request.args.get('limit', 50))
+        
+        # Calculate date range
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=days)
+        
+        # Get recent events
+        events = list(mongo_db.business_events.find({
+            'event_date': {'$gte': start_date, '$lte': end_date}
+        }).sort('event_date', -1).limit(limit))
+        
+        # Format events for display
+        formatted_events = []
+        for event in events:
+            # Get customer name if available
+            customer_name = None
+            if event.get('customer_id'):
+                customer = mongo_db.customers.find_one({'_id': event['customer_id']})
+                customer_name = customer.get('name') if customer else None
+            
+            formatted_events.append({
+                'id': str(event['_id']),
+                'event_type': event['event_type'],
+                'description': event['description'],
+                'event_date': event['event_date'].strftime('%Y-%m-%d %H:%M:%S'),
+                'customer_name': customer_name,
+                'plan_name': event.get('plan_name'),
+                'amount': event.get('amount'),
+                'currency': event.get('currency'),
+                'processed': event.get('processed', False),
+                'auto_generated': event.get('auto_generated', False)
+            })
+        
+        return jsonify({
+            'success': True,
+            'events': formatted_events,
+            'total': len(formatted_events)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Get recent events error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
